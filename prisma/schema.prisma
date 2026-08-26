@@ -1,0 +1,169 @@
+// Kushal's Mart — Prisma Schema
+// All prices are stored in PAISE (₹1 = 100 paise) for precision.
+// This convention is used consistently across every model and API.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")    // Supabase pooled connection (port 6543, pgbouncer=true)
+  directUrl = env("DIRECT_URL")      // Supabase direct connection (port 5432) — migrations only
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  description     String
+  categoryId      String
+  category        Category         @relation(fields: [categoryId], references: [id])
+  brand           String?
+  mrp             Int              // paise
+  sellingPrice    Int              // paise
+  images          String[]         // array of Supabase Storage URLs
+  metaTitle       String?
+  metaDescription String?
+  isActive        Boolean          @default(true)
+  variants        ProductVariant[]
+  orderItems      OrderItem[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+model ProductVariant {
+  id                String             @id @default(cuid())
+  productId         String
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name              String             // e.g. "Red", "1:64 Scale"
+  sku               String             @unique
+  stock             Int                @default(0)
+  lowStockThreshold Int                @default(3)
+  orderItems        OrderItem[]
+  stockLedger       StockLedgerEntry[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([productId])
+}
+
+// Every stock change is logged here for audit trail and concurrency safety.
+model StockLedgerEntry {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  change    Int            // negative for sale, positive for restock
+  reason    String         // ONLINE_SALE | OFFLINE_SALE | MANUAL_RESTOCK | MANUAL_ADJUSTMENT | ORDER_CANCELLED
+  note      String?        // optional admin note for manual adjustments
+  orderId   String?
+  createdAt DateTime       @default(now())
+
+  @@index([variantId])
+  @@index([orderId])
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  orderNumber       String      @unique // KM-YYYYMMDD-XXXX
+  channel           String      // ONLINE | OFFLINE
+  status            String      // PENDING_PAYMENT | PAID | PACKED | SHIPPED | DELIVERED | CANCELLED | COMPLETED
+  customerName      String
+  customerPhone     String      // required for BOTH channels — tracking lookup key
+  customerEmail     String?
+  shippingAddress   Json?       // null for offline orders
+  subtotal          Int         // paise
+  discount          Int         @default(0) // paise
+  total             Int         // paise
+  paymentStatus     String      // PENDING | PAID | FAILED | NOT_APPLICABLE
+  razorpayOrderId   String?     // convenience lookup (Payment table is source of truth)
+  razorpayPaymentId String?     // convenience lookup
+  shiprocketAwb     String?     // pasted in manually by admin
+  courierName       String?
+  items             OrderItem[]
+  payments          Payment[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([customerPhone, orderNumber])
+  @@index([status])
+  @@index([channel])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String         @id @default(cuid())
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product        @relation(fields: [productId], references: [id])
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  productName String         // snapshot at time of sale
+  variantName String         // snapshot at time of sale
+  unitPrice   Int            // paise, snapshot at time of sale
+  quantity    Int
+  lineTotal   Int            // paise
+
+  @@index([orderId])
+}
+
+// Dedicated payment audit trail — source of truth for all payment events.
+// The flat razorpayOrderId/razorpayPaymentId on Order are convenience lookups only.
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?  @unique
+  amount            Int      // paise — must match Order.total
+  currency          String   @default("INR")
+  status            String   @default("created") // created | authorized | captured | failed | refunded | partially_refunded
+  failureReason     String?
+  rawWebhookPayload Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+// Single-row table for store-level settings.
+model StoreSettings {
+  id    String  @id @default("singleton") // always exactly one row
+  gstin String? // store's GSTIN, shown on KOT header if set
+}
+
+// Powers the "forgot my order number" OTP flow — NOT a persistent account.
+model OtpVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  otpHash   String   // hashed OTP, never stored plaintext
+  purpose   String   // TRACK_ORDER_LOOKUP
+  expiresAt DateTime // typically now() + 10 minutes
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0) // failed verify attempts — lock out after 5
+  createdAt DateTime @default(now())
+
+  @@index([phone, purpose])
+}
