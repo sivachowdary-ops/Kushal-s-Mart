@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# security playbook — NEVER commit
+vibe-coded-security-playbook.md

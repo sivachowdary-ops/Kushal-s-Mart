@@ -1,0 +1,822 @@
+{
+  "categories": [
+    {
+      "id": "cat-rc-cars",
+      "name": "RC Cars",
+      "slug": "rc-cars",
+      "description": "Remote-controlled cars and vehicles for all ages",
+      "imageUrl": "/products/1-24-rc-drift-car-fun-chapter-1.webp",
+      "sortOrder": 1,
+      "createdAt": "2026-08-29T10:50:41.832"
+    },
+    {
+      "id": "cat-diecast",
+      "name": "Diecast Metal Cars",
+      "slug": "diecast-metal-cars",
+      "description": "Precision 1/64 scale diecast metal collectible cars and drift models",
+      "imageUrl": "/products/1-24-rc-drift-car-fun-chapter-2.webp",
+      "sortOrder": 2,
+      "createdAt": "2026-08-29T10:50:41.832"
+    },
+    {
+      "id": "cat-premium",
+      "name": "Premium",
+      "slug": "premium",
+      "description": "High-end RC trucks, crawlers, lorries and professional-grade models",
+      "imageUrl": "/products/rc-1-18-police-truck-1.webp",
+      "sortOrder": 3,
+      "createdAt": "2026-08-29T10:50:41.832"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod-dodge-charger",
+      "name": "1/64 Dodge Charger",
+      "slug": "1-64-dodge-charger",
+      "brand": null,
+      "mrp": 44900,
+      "sellingPrice": 24900,
+      "images": [],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-dodge-black",
+          "sku": "DC-DODGE-BLK",
+          "name": "Black",
+          "stock": 12,
+          "images": [],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-64-nissan",
+      "name": "1/64 Nissan 4WD Drift",
+      "slug": "1-64-nissan-4wd-drift",
+      "brand": null,
+      "mrp": 180000,
+      "sellingPrice": 124900,
+      "images": [],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-64-nissan-silver",
+          "sku": "DC-NISS-SIL",
+          "name": "Silver",
+          "stock": 12,
+          "images": [],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-64-nissan-darkblue",
+          "sku": "DC-NISS-DKBLU",
+          "name": "Dark Blue",
+          "stock": 12,
+          "images": [],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-police-truck",
+      "name": "RC 1/18 Police Truck",
+      "slug": "rc-1-18-police-truck",
+      "brand": null,
+      "mrp": 250000,
+      "sellingPrice": 180000,
+      "images": [
+        "/products/rc-1-18-police-truck-1.webp",
+        "/products/rc-1-18-police-truck-2.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-police-black",
+          "sku": "RC-POL-BLK",
+          "name": "Black",
+          "stock": 12,
+          "images": [],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-64-toyota",
+      "name": "1/64 Toyota 4WD Drift",
+      "slug": "1-64-toyota-4wd-drift",
+      "brand": null,
+      "mrp": 180000,
+      "sellingPrice": 124900,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612831253-s8ex27.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612841762-b9rplx.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613286943-84jh2u.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613294732-cdmcim.webp"
+      ],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-64-toyota-red",
+          "sku": "DC-TOYO-RED",
+          "name": "Red",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612831253-s8ex27.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612841762-b9rplx.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-64-toyota-white",
+          "sku": "DC-TOYO-WHT",
+          "name": "White",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613286943-84jh2u.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613294732-cdmcim.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-polo-drift",
+      "name": "1/24 Polo RC Drift 4WD Car",
+      "slug": "1-24-polo-rc-drift-4wd-car",
+      "brand": "Polo Drift Series",
+      "mrp": 299900,
+      "sellingPrice": 169900,
+      "images": [
+        "/products/polo-drift-dark-blue-1.webp",
+        "/products/polo-drift-dark-blue-2.webp",
+        "/products/polo-drift-light-blue-1.webp",
+        "/products/polo-drift-light-blue-2.webp",
+        "/products/polo-drift-red-1.webp",
+        "/products/polo-drift-red-2.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-polo-dark-blue",
+          "sku": "RC-POLO-DKBLUE",
+          "name": "Dark Blue",
+          "stock": 12,
+          "images": [
+            "/products/polo-drift-dark-blue-1.webp",
+            "/products/polo-drift-dark-blue-2.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-polo-light-blue",
+          "sku": "RC-POLO-LTBLUE",
+          "name": "Light Blue",
+          "stock": 12,
+          "images": [
+            "/products/polo-drift-light-blue-1.webp",
+            "/products/polo-drift-light-blue-2.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-polo-red",
+          "sku": "RC-POLO-RED",
+          "name": "Red",
+          "stock": 12,
+          "images": [
+            "/products/polo-drift-red-1.webp",
+            "/products/polo-drift-red-2.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-64-bmw-yegao",
+      "name": "1/64 BMW 4WD Drift — Yegao Brand",
+      "slug": "1-64-bmw-4wd-drift-yegao",
+      "brand": "Yegao",
+      "mrp": 180000,
+      "sellingPrice": 124900,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612455620-dspwre.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612465963-v5swyr.webp"
+      ],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-64-bmw-white",
+          "sku": "DC-BMW-YG-WHT",
+          "name": "White",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612455620-dspwre.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612465963-v5swyr.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-gantry-suchiyu",
+      "name": "Gantry 1/16 Suchiyu RC Car",
+      "slug": "gantry-1-16-suchiyu-rc-car",
+      "brand": "Suchiyu",
+      "mrp": 1000000,
+      "sellingPrice": 800000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613641154-youtzy.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613648963-z8ukqz.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-gantry-std",
+          "sku": "RC-GTR16-STD",
+          "name": "Standard",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613641154-youtzy.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613648963-z8ukqz.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-thar-rox",
+      "name": "1/18 RC Thar Rox",
+      "slug": "1-18-rc-thar-rox",
+      "brand": null,
+      "mrp": 300000,
+      "sellingPrice": 180000,
+      "images": [
+        "/products/thar-rox-red-1.webp",
+        "/products/thar-rox-red-2.webp",
+        "/products/thar-rox-black-1.webp",
+        "/products/thar-rox-black-2.webp",
+        "/products/thar-rox-yellow-1.webp",
+        "/products/thar-rox-yellow-2.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-thar-black",
+          "sku": "RC-THAR-BLK",
+          "name": "Black",
+          "stock": 12,
+          "images": [
+            "/products/thar-rox-black-1.webp",
+            "/products/thar-rox-black-2.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-thar-yellow",
+          "sku": "RC-THAR-YLW",
+          "name": "Yellow",
+          "stock": 12,
+          "images": [
+            "/products/thar-rox-yellow-1.webp",
+            "/products/thar-rox-yellow-2.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-thar-red",
+          "sku": "RC-THAR-RED",
+          "name": "Red",
+          "stock": 12,
+          "images": [
+            "/products/thar-rox-red-1.webp",
+            "/products/thar-rox-red-2.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-monster-car",
+      "name": "RC 1/12 Scale Monster Car",
+      "slug": "rc-1-12-scale-monster-car",
+      "brand": null,
+      "mrp": 499900,
+      "sellingPrice": 260000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602679189-0gkqgg.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602696767-pul5qq.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602704899-9ciohp.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602714056-k61c5x.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602722443-l4i4x5.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602731444-r0qb1d.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-monster-black",
+          "sku": "RC-MSTR-BLK",
+          "name": "Black",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602679189-0gkqgg.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602696767-pul5qq.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-monster-blue",
+          "sku": "RC-MSTR-BLU",
+          "name": "Blue",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602704899-9ciohp.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602714056-k61c5x.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-monster-orange",
+          "sku": "RC-MSTR-ORG",
+          "name": "Orange",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602722443-l4i4x5.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602731444-r0qb1d.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-lamborghini",
+      "name": "1/10 Scale Lamborghini RC Car",
+      "slug": "1-10-scale-lamborghini-rc-car",
+      "brand": null,
+      "mrp": 599900,
+      "sellingPrice": 300000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602807347-0vh7oa.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602821659-vpm6ri.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-lamborghini-std",
+          "sku": "RC-LAMBO-STD",
+          "name": "Standard",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602807347-0vh7oa.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788602821659-vpm6ri.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-huina-1536",
+      "name": "Huina 1536 Pro Lorry",
+      "slug": "huina-1536-pro-lorry",
+      "brand": "Huina",
+      "mrp": 2500000,
+      "sellingPrice": 2000000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610133584-9vod50.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610140969-iurj0a.webp"
+      ],
+      "categoryId": "cat-premium",
+      "isActive": true,
+      "Category": {
+        "id": "cat-premium",
+        "name": "Premium",
+        "slug": "premium"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-huina-std",
+          "sku": "PREM-HUINA-STD",
+          "name": "Standard",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610133584-9vod50.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610140969-iurj0a.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-toyota-mn82",
+      "name": "Toyota Landcruiser MN82",
+      "slug": "toyota-landcruiser-mn82",
+      "brand": "Toyota MN82",
+      "mrp": 900000,
+      "sellingPrice": 700000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610448105-xz8dvf.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610455761-4dim4n.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610462075-8ximxn.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610468295-ysuphz.webp"
+      ],
+      "categoryId": "cat-premium",
+      "isActive": true,
+      "Category": {
+        "id": "cat-premium",
+        "name": "Premium",
+        "slug": "premium"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-mn82-red",
+          "sku": "PREM-LC-MN82-RED",
+          "name": "Red",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610448105-xz8dvf.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610455761-4dim4n.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-mn82-green",
+          "sku": "PREM-LC-MN82-GRN",
+          "name": "Green",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610462075-8ximxn.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788610468295-ysuphz.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-rally-climber",
+      "name": "1/10 Racing Rally Climber IPX5",
+      "slug": "1-10-racing-rally-climber-ipx5",
+      "brand": null,
+      "mrp": 1400000,
+      "sellingPrice": 1300000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612102224-bbeo8k.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612109139-9zh5mr.webp"
+      ],
+      "categoryId": "cat-premium",
+      "isActive": true,
+      "Category": {
+        "id": "cat-premium",
+        "name": "Premium",
+        "slug": "premium"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-rally-yellow",
+          "sku": "PREM-RALLY-YLW",
+          "name": "Yellow",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612102224-bbeo8k.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788612109139-9zh5mr.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-fun-chapter",
+      "name": "1/24 RC Drift Car — Fun Chapter",
+      "slug": "1-24-rc-drift-car-fun-chapter",
+      "brand": "Fun Chapter",
+      "mrp": 249900,
+      "sellingPrice": 170000,
+      "images": [
+        "/products/1-24-rc-drift-car-fun-chapter-1.webp",
+        "/products/1-24-rc-drift-car-fun-chapter-2.webp",
+        "/products/1-24-rc-drift-car-fun-chapter-3.webp",
+        "/products/fun-chapter-sedan-blue-1.webp",
+        "/products/fun-chapter-sedan-blue-2.webp",
+        "/products/fun-chapter-sedan-blue-3.webp",
+        "/products/fun-chapter-sedan-orange-1.webp",
+        "/products/fun-chapter-sedan-orange-2.webp",
+        "/products/fun-chapter-sedan-orange-3.webp",
+        "/products/fun-chapter-suv-blue-1.webp",
+        "/products/fun-chapter-suv-orange-1.webp",
+        "/products/fun-chapter-suv-orange-2.webp"
+      ],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-fcr-sedan-blue",
+          "sku": "RC-FCR-SDN-BLU",
+          "name": "Sedan — Blue",
+          "stock": 12,
+          "images": [
+            "/products/fun-chapter-sedan-blue-1.webp",
+            "/products/fun-chapter-sedan-blue-2.webp",
+            "/products/fun-chapter-sedan-blue-3.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-fcr-sedan-orange",
+          "sku": "RC-FCR-SDN-ORG",
+          "name": "Sedan — Orange",
+          "stock": 12,
+          "images": [
+            "/products/fun-chapter-sedan-orange-1.webp",
+            "/products/fun-chapter-sedan-orange-2.webp",
+            "/products/fun-chapter-sedan-orange-3.webp"
+          ],
+          "sellingPriceOverride": 180000
+        },
+        {
+          "id": "var-fcr-suv-blue",
+          "sku": "RC-FCR-SUV-BLU",
+          "name": "SUV — Blue",
+          "stock": 12,
+          "images": [
+            "/products/fun-chapter-suv-orange-1.webp",
+            "/products/fun-chapter-suv-orange-2.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-fcr-suv-orange",
+          "sku": "RC-FCR-SUV-ORG",
+          "name": "SUV — Orange",
+          "stock": 12,
+          "images": [
+            "/products/1-24-rc-drift-car-fun-chapter-1.webp",
+            "/products/1-24-rc-drift-car-fun-chapter-2.webp",
+            "/products/1-24-rc-drift-car-fun-chapter-3.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-jxc-land-rover",
+      "name": "JXC RC 4WD 1/18 Land Rover Crawler",
+      "slug": "jxc-rc-4wd-1-18-land-rover-crawler",
+      "brand": "JXC",
+      "mrp": 900000,
+      "sellingPrice": 700000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613116942-q9oj8c.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613125806-tkdpfp.webp"
+      ],
+      "categoryId": "cat-premium",
+      "isActive": true,
+      "Category": {
+        "id": "cat-premium",
+        "name": "Premium",
+        "slug": "premium"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-jxc-std",
+          "sku": "PREM-JXC-STD",
+          "name": "Standard",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613116942-q9oj8c.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788613125806-tkdpfp.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-64-mini-bmw",
+      "name": "1/64 Mini BMW 4WD Drift",
+      "slug": "1-64-mini-bmw-4wd-drift",
+      "brand": null,
+      "mrp": 180000,
+      "sellingPrice": 124900,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788604234945-kafytg.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788604242770-gutv24.webp"
+      ],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-64-minibmw-black",
+          "sku": "DC-MINIBMW-BLK",
+          "name": "Black",
+          "stock": 12,
+          "images": [],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-scania-v770",
+      "name": "Scania V770 S Truck with Trailer",
+      "slug": "scania-v770-s-truck-with-trailer",
+      "brand": "Scania",
+      "mrp": 2000000,
+      "sellingPrice": 1500000,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788609843512-lm7x0b.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788609851831-xyjfz8.webp"
+      ],
+      "categoryId": "cat-premium",
+      "isActive": true,
+      "Category": {
+        "id": "cat-premium",
+        "name": "Premium",
+        "slug": "premium"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-scania-std",
+          "sku": "PREM-SCANIA-STD",
+          "name": "Standard",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788609843512-lm7x0b.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788609851831-xyjfz8.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-64-porsche",
+      "name": "1/64 Porsche 4WD Drift",
+      "slug": "1-64-porsche-4wd-drift",
+      "brand": null,
+      "mrp": 180000,
+      "sellingPrice": 124900,
+      "images": [
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614244143-35l7uv.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614250102-cpvqfv.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614257625-gii21l.webp",
+        "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614264692-yswudx.webp"
+      ],
+      "categoryId": "cat-diecast",
+      "isActive": true,
+      "Category": {
+        "id": "cat-diecast",
+        "name": "Diecast Metal Cars",
+        "slug": "diecast-metal-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-64-porsche-white",
+          "sku": "DC-PORS-WHT",
+          "name": "White",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614244143-35l7uv.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614250102-cpvqfv.webp"
+          ],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-64-porsche-purple",
+          "sku": "DC-PORS-PRP",
+          "name": "Purple",
+          "stock": 12,
+          "images": [
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614257625-gii21l.webp",
+            "https://gotzmiwqoxczkmjxnfci.supabase.co/storage/v1/object/public/products/products/1788614264692-yswudx.webp"
+          ],
+          "sellingPriceOverride": null
+        }
+      ]
+    },
+    {
+      "id": "prod-joy-junction-nissan",
+      "name": "Joy Junction 1/10 Scale RC Car — Nissan",
+      "slug": "joy-junction-1-10-rc-car-nissan",
+      "brand": "Joy Junction",
+      "mrp": 599900,
+      "sellingPrice": 300000,
+      "images": [],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-jjn-red",
+          "sku": "RC-JJN-RED",
+          "name": "Red",
+          "stock": 10,
+          "images": [],
+          "sellingPriceOverride": null
+        },
+        {
+          "id": "var-jjn-green",
+          "sku": "RC-JJN-GRN",
+          "name": "Green",
+          "stock": 10,
+          "images": [],
+          "sellingPriceOverride": 299900
+        }
+      ]
+    },
+    {
+      "id": "prod-1-10-rc-mecalring",
+      "name": "1/10 Scale RC Big Size Mecalring",
+      "slug": "1-10-scale-rc-big-size-mecalring",
+      "brand": "Mecalring",
+      "mrp": 599900,
+      "sellingPrice": 300000,
+      "images": [],
+      "categoryId": "cat-rc-cars",
+      "isActive": true,
+      "Category": {
+        "id": "cat-rc-cars",
+        "name": "RC Cars",
+        "slug": "rc-cars"
+      },
+      "ProductVariant": [
+        {
+          "id": "var-mecalring-green",
+          "sku": "RC-MECAL-GRN",
+          "name": "Green",
+          "stock": 10,
+          "images": [],
+          "sellingPriceOverride": null
+        }
+      ]
+    }
+  ]
+}
