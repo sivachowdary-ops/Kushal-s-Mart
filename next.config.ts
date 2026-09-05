@@ -10,6 +10,30 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/track",
+        destination: "/track-order",
+        permanent: false,
+      },
+      {
+        source: "/tracking",
+        destination: "/track-order",
+        permanent: false,
+      },
+      {
+        source: "/orders/track",
+        destination: "/track-order",
+        permanent: false,
+      },
+      {
+        source: "/trackorder",
+        destination: "/track-order",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

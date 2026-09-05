@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
-import { ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight, ShoppingBag } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight, ShoppingBag } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { useCart } from "@/lib/cart-context";
 import { ColorSwatchSelector } from "@/components/storefront/color-swatch-selector";
@@ -82,6 +82,34 @@ export default function ProductDetailPage() {
   const activeImages = (currentVariant?.images?.length ?? 0) > 0
     ? (currentVariant?.images ?? [])
     : (product?.images ?? []);
+
+  // Carousel controls & touch swipe
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  const handlePrevImage = () => {
+    if (activeImages.length <= 1) return;
+    setSelectedImage((prev) => (prev > 0 ? prev - 1 : activeImages.length - 1));
+  };
+
+  const handleNextImage = () => {
+    if (activeImages.length <= 1) return;
+    setSelectedImage((prev) => (prev < activeImages.length - 1 ? prev + 1 : 0));
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (diff > 40) {
+      handleNextImage();
+    } else if (diff < -40) {
+      handlePrevImage();
+    }
+    setTouchStartX(null);
+  };
 
   // Reset gallery to first image whenever the selected variant changes
   useEffect(() => {
@@ -193,19 +221,34 @@ export default function ProductDetailPage() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          {/* Left: Image Gallery */}
-          <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm lg:sticky lg:top-24">
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-50 flex items-center justify-center p-4">
+          {/* Left: Image Gallery with Carousel Navigation */}
+          <div className="lg:col-span-7 bg-white rounded-3xl p-4 sm:p-6 border border-gray-200/80 shadow-sm lg:sticky lg:top-24">
+            <div
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="group relative aspect-square w-full overflow-hidden rounded-2xl bg-gray-50 flex items-center justify-center p-4 select-none"
+            >
+              {/* Discount Tag */}
               {discountPercent > 0 && (
-                <div className="absolute top-4 left-4 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white shadow">
+                <div className="absolute top-4 left-4 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white shadow-md">
                   {discountPercent}% OFF
                 </div>
               )}
+
+              {/* Slide Counter Badge */}
+              {activeImages.length > 1 && (
+                <div className="absolute top-4 right-4 z-10 rounded-full bg-black/60 backdrop-blur-md px-3 py-1 text-[11px] font-bold text-white shadow-sm font-mono">
+                  {selectedImage + 1} / {activeImages.length}
+                </div>
+              )}
+
+              {/* Main Active Image */}
               {activeImages.length > 0 ? (
                 <img
                   src={activeImages[selectedImage] || activeImages[0]}
                   alt={product.name}
-                  className="h-full w-full object-contain transition-transform duration-300 hover:scale-105"
+                  key={activeImages[selectedImage] || selectedImage}
+                  className="h-full w-full object-contain transition-all duration-300 hover:scale-105 animate-fade-in"
                 />
               ) : (
                 <div className="flex flex-col items-center gap-3 text-gray-300">
@@ -213,15 +256,72 @@ export default function ProductDetailPage() {
                   <span className="text-sm font-medium">Image coming soon</span>
                 </div>
               )}
+
+              {/* Navigation Arrows (< and >) */}
+              {activeImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handlePrevImage(); }}
+                    aria-label="Previous image"
+                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/90 backdrop-blur-md text-gray-800 shadow-lg border border-gray-200 hover:bg-white hover:text-red-600 hover:scale-110 active:scale-90 transition-all cursor-pointer"
+                  >
+                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleNextImage(); }}
+                    aria-label="Next image"
+                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white/90 backdrop-blur-md text-gray-800 shadow-lg border border-gray-200 hover:bg-white hover:text-red-600 hover:scale-110 active:scale-90 transition-all cursor-pointer"
+                  >
+                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+
+                  {/* Bottom Dots Indicator */}
+                  <div className="absolute bottom-3 inset-x-0 z-20 flex items-center justify-center gap-1.5 pointer-events-none">
+                    <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-md px-3 py-1.5 shadow-md">
+                      {activeImages.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedImage(idx)}
+                          aria-label={`Go to image ${idx + 1}`}
+                          className={`h-2 rounded-full transition-all cursor-pointer ${
+                            selectedImage === idx ? "w-6 bg-white" : "w-2 bg-white/40 hover:bg-white/80"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* In-Gallery Instant Color Swatches Bar — Never scroll to pick a color! */}
+            {product.variants.length > 1 && (
+              <div className="mt-3">
+                <ColorSwatchSelector
+                  variants={product.variants}
+                  selectedVariantId={selectedVariantId}
+                  onSelectVariant={setSelectedVariantId}
+                  mode="gallery-bar"
+                />
+              </div>
+            )}
+
+            {/* Thumbnail Carousel Bar with click and active highlight */}
             {activeImages.length > 1 && (
-              <div className="mt-4 flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none touch-pan-x snap-x">
+              <div className="mt-3 flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none touch-pan-x snap-x">
                 {activeImages.map((img, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => setSelectedImage(idx)}
-                    className={`h-20 w-20 min-h-[44px] min-w-[44px] shrink-0 overflow-hidden rounded-2xl border-2 p-1 transition-all snap-start ${
-                      selectedImage === idx ? "border-red-600 shadow-md ring-2 ring-red-100" : "border-gray-200 hover:border-gray-400"
+                    className={`h-16 w-16 sm:h-20 sm:w-20 min-h-[44px] min-w-[44px] shrink-0 overflow-hidden rounded-2xl border-2 p-1 transition-all snap-start cursor-pointer ${
+                      selectedImage === idx
+                        ? "border-red-600 shadow-md ring-2 ring-red-100 scale-105"
+                        : "border-gray-200 hover:border-gray-400 opacity-70 hover:opacity-100"
                     }`}
                   >
                     <img src={img} alt="" className="h-full w-full object-contain" />
@@ -257,6 +357,18 @@ export default function ProductDetailPage() {
                 {product.name}
               </h1>
 
+              {/* Variant Selector — PLACED RIGHT UNDER TITLE ABOVE THE FOLD */}
+              {product.variants.length > 1 && (
+                <div className="pt-2 border-t border-gray-100">
+                  <ColorSwatchSelector
+                    variants={product.variants}
+                    selectedVariantId={selectedVariantId}
+                    onSelectVariant={setSelectedVariantId}
+                    mode="interactive"
+                  />
+                </div>
+              )}
+
               {/* Price */}
               <div className="flex items-baseline gap-3 pt-1 border-t border-gray-100">
                 <span className="font-extrabold text-3xl sm:text-4xl text-gray-900">
@@ -276,18 +388,6 @@ export default function ProductDetailPage() {
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                 Inclusive of all taxes. Free express shipping across India.
               </p>
-
-              {/* Variant Selector — Circular Color Swatches matching Image 2 */}
-              {product.variants.length > 1 && (
-                <div className="pt-3 border-t border-gray-100">
-                  <ColorSwatchSelector
-                    variants={product.variants}
-                    selectedVariantId={selectedVariantId}
-                    onSelectVariant={setSelectedVariantId}
-                    mode="interactive"
-                  />
-                </div>
-              )}
 
               {/* Quantity Stepper */}
               <div className="flex items-center gap-4 pt-3 border-t border-gray-100">

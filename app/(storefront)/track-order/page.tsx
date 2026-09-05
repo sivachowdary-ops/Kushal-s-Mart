@@ -17,20 +17,21 @@ interface TrackedOrder {
   id: string;
   order_number: string;
   status: string;
-  channel: string;
-  customer_name: string;
-  customer_phone: string;
-  subtotal: number;
-  discount: number;
+  channel?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  subtotal?: number;
+  discount?: number;
   total: number;
-  payment_status: string;
-  payment_mode: string;
+  payment_status?: string;
+  payment_mode?: string;
   shiprocket_awb?: string | null;
   courier_name?: string | null;
   shipping_address?: Record<string, string> | null;
-  timeline: { status: string; timestamp: string; note?: string }[];
+  timeline?: { status: string; timestamp: string; note?: string }[];
   created_at: string;
-  order_items: OrderItem[];
+  order_items?: OrderItem[];
+  items?: OrderItem[];
 }
 
 const STATUS_STEPS = ["PENDING", "PROCESSING", "PACKED", "SHIPPED", "DELIVERED"];
@@ -130,24 +131,26 @@ function OrderCard({ order }: { order: TrackedOrder }) {
         )}
 
         {/* Order Items Preview */}
-        <div className="mt-4 space-y-2">
-          {order.order_items.slice(0, expanded ? undefined : 2).map((item) => (
-            <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-              {item.image ? (
-                <img src={item.image} alt={item.product_name} className="h-10 w-10 rounded-lg object-contain bg-gray-50 border border-gray-100 shrink-0" />
-              ) : (
-                <div className="h-10 w-10 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center">
-                  <Package className="h-5 w-5 text-gray-400" />
+        {((order.order_items || order.items || []).length > 0) && (
+          <div className="mt-4 space-y-2">
+            {(order.order_items || order.items || []).slice(0, expanded ? undefined : 2).map((item) => (
+              <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                {item.image ? (
+                  <img src={item.image} alt={item.product_name} className="h-10 w-10 rounded-lg object-contain bg-gray-50 border border-gray-100 shrink-0" />
+                ) : (
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center">
+                    <Package className="h-5 w-5 text-gray-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 truncate">{item.product_name}</p>
+                  <p className="text-[10px] text-gray-500 font-semibold">{item.variant_name} · Qty: {item.quantity}</p>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-gray-900 truncate">{item.product_name}</p>
-                <p className="text-[10px] text-gray-500 font-semibold">{item.variant_name} · Qty: {item.quantity}</p>
+                <span className="text-xs font-extrabold text-gray-900 shrink-0">{formatPrice(item.line_total)}</span>
               </div>
-              <span className="text-xs font-extrabold text-gray-900 shrink-0">{formatPrice(item.line_total)}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Total Row */}
         <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
@@ -166,11 +169,11 @@ function OrderCard({ order }: { order: TrackedOrder }) {
       </button>
 
       {/* Timeline Detail */}
-      {expanded && order.timeline.length > 0 && (
+      {expanded && (order.timeline || []).length > 0 && (
         <div className="p-5 sm:p-6 pt-0 space-y-4 border-t border-gray-100">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Status Timeline</h3>
           <div className="relative pl-6 space-y-5 border-l-2 border-gray-200">
-            {order.timeline.map((step, idx) => (
+            {(order.timeline || []).map((step, idx) => (
               <div key={idx} className="relative">
                 <div className="absolute -left-[31px] top-0 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
                   <CheckCircle2 className="h-3.5 w-3.5" />

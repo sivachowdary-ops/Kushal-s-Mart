@@ -84,6 +84,11 @@ export function Footer() {
                   Shop by Category
                 </Link>
               </li>
+              <li>
+                <Link href="/track-order" className="hover:text-white transition-colors text-red-400 font-bold">
+                  Track Order
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -93,6 +98,11 @@ export function Footer() {
               CUSTOMER CARE
             </h3>
             <ul className="space-y-3 text-xs font-semibold text-gray-400">
+              <li>
+                <Link href="/track-order" className="hover:text-white transition-colors text-red-400 font-bold flex items-center gap-1.5">
+                  <span>Track Your Order</span>
+                </Link>
+              </li>
               <li>
                 <Link href="/about" className="hover:text-white transition-colors">
                   About Us

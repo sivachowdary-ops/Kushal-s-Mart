@@ -140,36 +140,36 @@ export default async function HomePage() {
               <Link
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
-                className={`group relative overflow-hidden flex flex-col items-center rounded-2xl sm:rounded-3xl bg-[#F4F5F7] border border-gray-200/80 p-4 sm:p-7 shadow-xs transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-red-300 hover:bg-white ${
+                className={`group relative overflow-hidden flex flex-col items-center rounded-2xl sm:rounded-3xl bg-[#F4F5F7] border border-gray-200/80 p-4 sm:p-7 shadow-xs transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-red-300 hover:bg-white active:scale-98 cursor-pointer ${
                   idx === 2 && categories.length === 3 ? "col-span-2 sm:col-span-1" : ""
                 }`}
               >
-                <div className="flex h-24 w-24 sm:h-32 sm:w-32 items-center justify-center rounded-2xl bg-white border border-gray-100 p-3 shadow-xs transition-all duration-300 group-hover:scale-105 group-hover:bg-red-50 group-hover:border-red-200">
+                <div className="flex h-24 w-24 sm:h-32 sm:w-32 items-center justify-center rounded-2xl bg-white border border-gray-100 p-3 shadow-xs transition-all duration-300 group-hover:scale-110 group-hover:bg-red-50/80 group-hover:border-red-200 group-hover:shadow-md">
                   {cat.imageUrl ? (
                     <img
                       src={cat.imageUrl}
                       alt={cat.name}
-                      className="h-full w-full object-contain transition-transform group-hover:scale-110"
+                      className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                       loading="lazy"
                     />
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center">
                       {cat.slug === "rc-cars" ? (
-                        <Car className="h-10 w-10 text-red-600" />
+                        <Car className="h-10 w-10 text-red-600 transition-transform group-hover:scale-110" />
                       ) : cat.slug === "diecast-metal-cars" ? (
-                        <Trophy className="h-10 w-10 text-yellow-600" />
+                        <Trophy className="h-10 w-10 text-yellow-600 transition-transform group-hover:scale-110" />
                       ) : (
-                        <Sparkles className="h-10 w-10 text-indigo-600" />
+                        <Sparkles className="h-10 w-10 text-indigo-600 transition-transform group-hover:scale-110" />
                       )}
                     </div>
                   )}
                 </div>
                 <div className="mt-3 sm:mt-4 text-center">
-                  <span className="text-xs sm:text-base font-extrabold text-gray-900 transition-colors group-hover:text-red-600 block line-clamp-1">
+                  <span className="text-xs sm:text-base font-extrabold text-gray-900 transition-colors duration-200 group-hover:text-red-600 block line-clamp-1">
                     {cat.name}
                   </span>
-                  <span className="mt-0.5 sm:mt-1 inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-gray-500 group-hover:text-red-600">
-                    Explore Models <ArrowRight className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="mt-0.5 sm:mt-1 inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-gray-500 group-hover:text-red-600 transition-colors">
+                    Explore Models <ArrowRight className="h-2.5 w-2.5 sm:h-3 sm:w-3 transition-transform group-hover:translate-x-1" />
                   </span>
                 </div>
               </Link>

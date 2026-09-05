@@ -60,7 +60,7 @@ interface ColorSwatchSelectorProps {
   variants: SwatchVariant[];
   selectedVariantId?: string;
   onSelectVariant?: (variantId: string) => void;
-  mode?: "interactive" | "compact"; // "interactive" for PDP, "compact" for product cards
+  mode?: "interactive" | "compact" | "gallery-bar"; // "interactive" for PDP, "compact" for product cards, "gallery-bar" for image overlay
 }
 
 export function ColorSwatchSelector({
@@ -101,6 +101,43 @@ export function ColorSwatchSelector({
   }, [variants]);
 
   if (items.length <= 1) return null;
+
+  // Gallery Bar Mode: Frosted quick-picker directly on/under image
+  if (mode === "gallery-bar") {
+    const currentSelection = items.find((c) => c.id === selectedVariantId) || items[0];
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/95 backdrop-blur-md px-3.5 py-2 border border-gray-200/90 shadow-sm">
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="font-bold text-gray-500 uppercase text-[10px] tracking-wider">Color:</span>
+          <span className="font-extrabold text-gray-900 text-xs">{currentSelection?.name}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {items.map((item) => {
+            const isSelected = (selectedVariantId || items[0]?.id) === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectVariant?.(item.id)}
+                className={`group relative flex items-center justify-center rounded-full p-0.5 transition-all focus:outline-none cursor-pointer ${
+                  isSelected
+                    ? "ring-2 ring-red-600 ring-offset-1 scale-110 shadow-sm"
+                    : "hover:scale-105 ring-1 ring-gray-300 opacity-80 hover:opacity-100"
+                }`}
+                title={item.name}
+                aria-label={`Select ${item.name}`}
+              >
+                <span
+                  className="h-5 w-5 rounded-full border border-black/20 shadow-2xs block"
+                  style={{ backgroundColor: item.hex }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   // Compact Mode: for Product Cards (listing view) — deduplicated clean dots
   if (mode === "compact") {
