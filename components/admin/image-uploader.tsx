@@ -124,12 +124,21 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
     });
   }, [value]);
 
+  // Use a ref to queue onChange calls outside of state updaters
+  const pendingSyncRef = useRef<ImageSlot[] | null>(null);
+
   const syncUrls = useCallback((updated: ImageSlot[]) => {
     const nextUrls = updated.filter((s) => s.url && !s.uploading).map((s) => s.url);
-    setTimeout(() => {
-      onChange(nextUrls);
-    }, 0);
+    onChange(nextUrls);
   }, [onChange]);
+
+  // Flush any pending sync after each render
+  useEffect(() => {
+    if (pendingSyncRef.current) {
+      syncUrls(pendingSyncRef.current);
+      pendingSyncRef.current = null;
+    }
+  });
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith("image/"));
@@ -158,14 +167,13 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
       try {
         const webp = await convertToWebP(file);
         const url = await uploadToR2(webp, folder);
-        let updatedSlots: ImageSlot[] = [];
         setSlots((prev) => {
-          updatedSlots = prev.map((s) =>
+          const updated = prev.map((s) =>
             s.preview === slotPreview ? { ...s, url, uploading: false } : s
           );
-          return updatedSlots;
+          pendingSyncRef.current = updated;
+          return updated;
         });
-        syncUrls(updatedSlots);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Upload failed";
         setSlots((prev) =>
@@ -183,29 +191,26 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
       deleteFromR2(slot.url).catch(() => {}); // best-effort delete
     }
     URL.revokeObjectURL(slot.preview);
-    let updatedSlots: ImageSlot[] = [];
     setSlots((prev) => {
-      updatedSlots = prev.filter((_, i) => i !== idx);
-      return updatedSlots;
+      const updated = prev.filter((_, i) => i !== idx);
+      pendingSyncRef.current = updated;
+      return updated;
     });
-    syncUrls(updatedSlots);
-  }, [slots, syncUrls]);
+  }, [slots]);
 
   // Drag-to-reorder handlers
   const onDragStart = (idx: number) => { dragIndex.current = idx; };
   const onDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
     if (dragIndex.current === null || dragIndex.current === idx) return;
-    let updatedSlots: ImageSlot[] = [];
     setSlots((prev) => {
       const arr = [...prev];
       const [moved] = arr.splice(dragIndex.current!, 1);
       arr.splice(idx, 0, moved);
       dragIndex.current = idx;
-      updatedSlots = arr;
+      pendingSyncRef.current = arr;
       return arr;
     });
-    syncUrls(updatedSlots);
   };
 
   const activeSlots = slots.filter((s) => !s.error);
