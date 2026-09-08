@@ -23,6 +23,19 @@ function generateOrderNumber() {
   return `KM-${dateStr}-${randomStr}`;
 }
 
+/**
+ * POST /api/orders/create
+ *
+ * Creates an Order with status PENDING_PAYMENT for the Cashfree checkout flow.
+ * Online payment only — no COD.
+ *
+ * Stock is NOT decremented here — that happens in the webhook handler
+ * after Cashfree confirms payment. Stock IS validated here to prevent
+ * orders for out-of-stock items.
+ *
+ * Shiprocket/Delhivery dispatch is NOT triggered here — that also
+ * happens in the webhook handler after payment confirmation.
+ */
 export async function POST(request: Request) {
   try {
     // Rate limit order creation to prevent stock depletion attacks
@@ -36,20 +49,26 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { customer_name, customer_phone, customer_email, shipping_address, items, payment_mode } = body;
+    const { customer_name, customer_phone, customer_email, shipping_address, items } = body;
     const channel = "ONLINE"; // Always ONLINE for public API — OFFLINE only via POS/admin
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
-    // Allow COD / Pay on Delivery for customer convenience and testing
-    const isCod = payment_mode?.toLowerCase() === "cod" || payment_mode?.toLowerCase() === "cash on delivery";
+    if (!customer_name || !customer_phone) {
+      return NextResponse.json({ error: "Customer name and phone are required" }, { status: 400 });
+    }
 
+    if (!shipping_address?.address || !shipping_address?.city || !shipping_address?.pincode) {
+      return NextResponse.json({ error: "Complete shipping address is required" }, { status: 400 });
+    }
+
+    // Fetch products and variants for server-side price calculation
     const productIds = items.map((item: Record<string, unknown>) => item.product_id);
     const { data: products, error: productsError } = await supabaseAdmin
       .from("Product")
-      .select("id, name, sellingPrice, costPrice, ProductVariant ( id, name, sellingPriceOverride )")
+      .select("id, name, sellingPrice, costPrice, ProductVariant ( id, name, stock, sellingPriceOverride )")
       .in("id", productIds);
 
     if (productsError) return NextResponse.json({ error: productsError.message }, { status: 500 });
@@ -59,6 +78,35 @@ export async function POST(request: Request) {
       productMap[p.id as string] = p;
     });
 
+    // ── Stock validation — check before creating order ──────────────────────
+    for (const item of items as Record<string, unknown>[]) {
+      const product = productMap[item.product_id as string];
+      if (!product) {
+        return NextResponse.json(
+          { error: `Product not found: ${item.product_id}` },
+          { status: 400 }
+        );
+      }
+
+      const variants = (product.ProductVariant as Record<string, unknown>[]) || [];
+      const matchedVariant = variants.find((v) => v.id === item.variant_id);
+
+      if (matchedVariant) {
+        const availableStock = (matchedVariant.stock as number) || 0;
+        const requestedQty = item.quantity as number;
+
+        if (availableStock < requestedQty) {
+          return NextResponse.json(
+            {
+              error: `"${product.name}" (${matchedVariant.name}) is out of stock. Only ${availableStock} available.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // ── Server-side price calculation ───────────────────────────────────────
     let subtotal = 0;
 
     const orderItems: OrderItemRecord[] = items.map((item: Record<string, unknown>) => {
@@ -80,8 +128,8 @@ export async function POST(request: Request) {
       subtotal += lineTotal;
 
       return {
-        productId: item.product_id,
-        variantId: matchedVariant ? matchedVariant.id : (item.variant_id || "default"),
+        productId: item.product_id as string,
+        variantId: matchedVariant ? (matchedVariant.id as string) : (item.variant_id as string || "default"),
         productName: product.name as string,
         variantName: (matchedVariant?.name as string) || (item.variant_name as string) || "Standard",
         unitPrice,
@@ -96,14 +144,14 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
-    // CHANGED: "orders"→"Order", all column names camelCase
+    // ── Create Order with PENDING_PAYMENT status ────────────────────────────
     const { data: order, error: orderError } = await supabaseAdmin
       .from("Order")
       .insert([{
         id: orderId,
         orderNumber,
         channel,
-        status: isCod ? "CONFIRMED" : "PENDING",
+        status: "PENDING_PAYMENT",
         customerName: customer_name,
         customerPhone: customer_phone,
         customerEmail: customer_email || null,
@@ -111,19 +159,16 @@ export async function POST(request: Request) {
         subtotal,
         discount: 0,
         total: subtotal,
-        paymentStatus: isCod ? "PENDING" : "PENDING",
-        paymentMode: isCod ? "cod" : (payment_mode || "prepaid"),
+        paymentStatus: "PENDING",
+        paymentMode: "prepaid",
         updatedAt: now,
-        timeline: [
-          { status: "PENDING", timestamp: now, note: isCod ? "Order placed (Cash on Delivery)" : "Order placed by customer" }
-        ],
       }])
       .select()
       .single();
 
     if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
 
-    // Insert OrderItems with explicit IDs
+    // ── Insert OrderItems with explicit IDs ─────────────────────────────────
     const itemsData = orderItems.map((item, idx) => ({
       id: `item-${order.id}-${idx}`,
       ...item,
@@ -132,85 +177,18 @@ export async function POST(request: Request) {
     const { error: itemsError } = await supabaseAdmin.from("OrderItem").insert(itemsData);
 
     if (itemsError) {
+      // Rollback: delete the Order if items fail
       await supabaseAdmin.from("Order").delete().eq("id", order.id);
       return NextResponse.json({ error: itemsError.message }, { status: 500 });
     }
 
-    // Deduct stock for each purchased item
-    for (const oi of itemsData) {
-      if (oi.variantId && oi.variantId !== "default") {
-        try {
-          const { data: v } = await supabaseAdmin
-            .from("ProductVariant")
-            .select("stock")
-            .eq("id", oi.variantId)
-            .single();
-          if (v) {
-            const newStock = Math.max(0, (v.stock || 0) - (oi.quantity as number));
-            await supabaseAdmin
-              .from("ProductVariant")
-              .update({ stock: newStock })
-              .eq("id", oi.variantId);
+    // NOTE: Stock decrement and shipment creation are NOT done here.
+    // They happen in POST /api/webhooks/cashfree after payment is confirmed.
 
-            await supabaseAdmin.from("StockLedgerEntry").insert([{
-              id: `stk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-              variantId: oi.variantId,
-              change: -(oi.quantity as number),
-              reason: "ONLINE_SALE",
-              referenceId: orderNumber,
-            }]);
-          }
-        } catch (stockErr) {
-          console.warn("Stock decrement warning for variant", oi.variantId, stockErr);
-        }
-      }
-    }
-
-    // Attempt automatic push to Shiprocket if credentials are set up
-    try {
-      const { createDirectShiprocketOrder } = await import("@/lib/shiprocket");
-      const shiprocketResult = await createDirectShiprocketOrder({
-        order_id: orderNumber,
-        order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
-        pickup_location: process.env.SHIPROCKET_PICKUP_LOCATION || "Primary",
-        billing_customer_name: customer_name,
-        billing_address: shipping_address?.address || "Address",
-        billing_city: shipping_address?.city || "Kochi",
-        billing_pincode: shipping_address?.pincode || "682020",
-        billing_state: shipping_address?.state || "Kerala",
-        billing_country: "India",
-        billing_email: customer_email || "customer@kushalsmart.com",
-        billing_phone: customer_phone,
-        shipping_is_billing: true,
-        order_items: orderItems.map((oi) => ({
-          name: oi.productName as string,
-          sku: (oi.variantId as string) || (oi.productId as string),
-          units: oi.quantity as number,
-          selling_price: Math.round((oi.unitPrice as number) / 100),
-        })),
-        payment_method: payment_mode === "cod" ? "COD" : "Prepaid",
-        sub_total: Math.round(subtotal / 100),
-        length: 15,
-        breadth: 10,
-        height: 10,
-        weight: 0.5,
-      });
-
-      if (shiprocketResult?.awb_code) {
-        await supabaseAdmin
-          .from("Order")
-          .update({
-            shiprocketAwb: shiprocketResult.awb_code,
-            courierName: shiprocketResult.courier_name || "Shiprocket Express",
-            status: "PACKED",
-          })
-          .eq("id", order.id);
-      }
-    } catch (srErr) {
-      console.warn("Shiprocket auto-creation skipped or failed:", srErr);
-    }
-
-    return NextResponse.json({ success: true, order_number: orderNumber, order_id: order.id }, { status: 201 });
+    return NextResponse.json(
+      { success: true, order_number: orderNumber, order_id: order.id },
+      { status: 201 }
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to create order";
     return NextResponse.json({ error: msg }, { status: 500 });

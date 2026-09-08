@@ -12,8 +12,7 @@ export function middleware(request: NextRequest) {
   // Skip auth check for admin auth endpoints and system health probe
   if (
     pathname.startsWith("/api/admin/auth/") ||
-    pathname === "/api/admin/health" ||
-    pathname === "/api/payment/webhook"
+    pathname === "/api/admin/health"
   ) {
     return NextResponse.next();
   }

@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useAdminStore } from "@/lib/admin-store";
 import Link from "next/link";
-import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer } from "lucide-react";
+import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw } from "lucide-react";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -17,6 +17,13 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [isSaving, setIsSaving] = useState(false);
   const [isDispatchingDelhivery, setIsDispatchingDelhivery] = useState(false);
   const [delhiverySuccessMsg, setDelhiverySuccessMsg] = useState<string | null>(null);
+
+  // Refund state
+  const [showRefundForm, setShowRefundForm] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundNote, setRefundNote] = useState("");
+  const [isRefunding, setIsRefunding] = useState(false);
+  const [refundMessage, setRefundMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     refreshOrders().then(() => setIsInitializing(false));
@@ -80,6 +87,50 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       alert("Failed to update shipping details");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!order) return;
+    const amountPaise = Math.round(parseFloat(refundAmount) * 100);
+    if (isNaN(amountPaise) || amountPaise <= 0) {
+      setRefundMessage({ type: "error", text: "Please enter a valid refund amount" });
+      return;
+    }
+    if (amountPaise > order.total) {
+      setRefundMessage({ type: "error", text: `Amount cannot exceed ₹${(order.total / 100).toFixed(2)}` });
+      return;
+    }
+
+    setIsRefunding(true);
+    setRefundMessage(null);
+    try {
+      const token = localStorage.getItem("admin_token") || "";
+      const res = await fetch(`/api/admin/orders/${order.id}/refund`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amount: amountPaise,
+          note: refundNote || "Admin-initiated refund",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRefundMessage({ type: "success", text: `✓ Refund processed (${data.status}). Refund ID: ${data.refundId}` });
+        setShowRefundForm(false);
+        setRefundAmount("");
+        setRefundNote("");
+        await refreshOrders();
+      } else {
+        setRefundMessage({ type: "error", text: data.error || "Refund failed" });
+      }
+    } catch {
+      setRefundMessage({ type: "error", text: "Failed to process refund" });
+    } finally {
+      setIsRefunding(false);
     }
   };
 
@@ -319,6 +370,80 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <div className="font-medium text-slate-900">{order.payment_status}</div>
               </div>
             </div>
+
+            {/* Refund Section */}
+            {order.payment_status === "PAID" && order.channel !== "OFFLINE" && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                {refundMessage && (
+                  <div className={`p-3 rounded-xl text-xs font-bold ${
+                    refundMessage.type === "success"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}>
+                    {refundMessage.text}
+                  </div>
+                )}
+
+                {!showRefundForm ? (
+                  <button
+                    onClick={() => {
+                      setShowRefundForm(true);
+                      setRefundAmount((order.total / 100).toFixed(2));
+                      setRefundNote("");
+                      setRefundMessage(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200 transition-colors"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Process Refund</span>
+                  </button>
+                ) : (
+                  <div className="space-y-3 bg-amber-50/50 rounded-xl p-4 border border-amber-200">
+                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider">Process Cashfree Refund</h3>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Refund Amount (₹) — max ₹{(order.total / 100).toFixed(2)}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={(order.total / 100).toFixed(2)}
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-amber-500"
+                        placeholder="Amount in rupees"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Reason (optional)</label>
+                      <input
+                        type="text"
+                        value={refundNote}
+                        onChange={(e) => setRefundNote(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-amber-500"
+                        placeholder="e.g. Customer requested cancellation"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleRefund}
+                        disabled={isRefunding}
+                        className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold disabled:opacity-50 transition-colors"
+                      >
+                        {isRefunding ? "Processing..." : "Confirm Refund"}
+                      </button>
+                      <button
+                        onClick={() => { setShowRefundForm(false); setRefundMessage(null); }}
+                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {order.shipping_address && (

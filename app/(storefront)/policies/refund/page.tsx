@@ -18,7 +18,7 @@ export default function RefundPolicyPage() {
           <p>To claim transit damage or missing items, an unedited 360-degree unboxing video recorded while opening the outer parcel seal is mandatory.</p>
 
           <h2 className="font-extrabold text-lg text-gray-900 border-b border-gray-100 pb-2">3. Refund Process</h2>
-          <p>Approved refunds are processed back to your original Razorpay payment method (UPI / Bank Account) within 5-7 business days.</p>
+          <p>Approved refunds are processed back to your original payment method (UPI / Bank Account) within 5-7 business days.</p>
         </div>
       </div>
     </div>

@@ -7,28 +7,6 @@ import { ShieldCheck, Lock, Truck, ArrowLeft, ShoppingBag, CreditCard, AlertCirc
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
 
-// Extend Window to include Razorpay
-declare global {
-  interface Window {
-    Razorpay: new (options: Record<string, unknown>) => {
-      open: () => void;
-      on: (event: string, handler: (response: unknown) => void) => void;
-    };
-  }
-}
-
-// Load Razorpay checkout script dynamically
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
-
 const INDIAN_STATES = [
   "Andhra Pradesh",
   "Arunachal Pradesh",
@@ -111,13 +89,34 @@ function CheckoutContent() {
     pincode: "",
   });
 
-  const [paymentMode, setPaymentMode] = useState<"online" | "cod">("online");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
 
-  // Preload Razorpay script on mount
+  // Preload Cashfree SDK on mount
+  const [cashfreeSdk, setCashfreeSdk] = useState<unknown>(null);
   useEffect(() => {
-    loadRazorpayScript().catch(() => {});
+    import("@cashfreepayments/cashfree-js").then((mod) => {
+      const loadFn = mod.load;
+      if (loadFn) {
+        const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
+        loadFn({ mode: cashfreeEnv }).then((sdk: unknown) => setCashfreeSdk(sdk));
+      }
+    }).catch(() => {
+      // Fallback: load from CDN script tag
+      if (typeof window !== "undefined" && !document.querySelector('script[src*="cashfree"]')) {
+        const script = document.createElement("script");
+        script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+        script.onload = () => {
+          const win = window as unknown as { Cashfree?: (opts: { mode: string }) => unknown };
+          if (win.Cashfree) {
+            const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
+            setCashfreeSdk(win.Cashfree({ mode: cashfreeEnv }));
+          }
+        };
+        document.head.appendChild(script);
+      }
+    });
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -127,6 +126,7 @@ function CheckoutContent() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setStatusMessage("");
 
     // Validation
     if (!formData.customerName || !formData.customerPhone || !formData.address || !formData.city || !formData.pincode) {
@@ -148,166 +148,97 @@ function CheckoutContent() {
 
     setIsSubmitting(true);
 
-    // ── Handle Cash on Delivery / Direct Test Order ─────────────────────────
-    if (paymentMode === "cod") {
-      try {
-        const res = await fetch("/api/orders/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel: "ONLINE",
-            payment_mode: "cod",
-            customer_name: formData.customerName.trim(),
-            customer_phone: formData.customerPhone.trim(),
-            customer_email: formData.customerEmail.trim() || undefined,
-            shipping_address: {
-              address: formData.address.trim(),
-              city: formData.city.trim(),
-              state: formData.state.trim(),
-              pincode: formData.pincode.trim(),
-            },
-            items: activeItems.map((item) => ({
-              product_id: item.productId,
-              variant_id: item.variantId,
-              product_name: item.name,
-              variant_name: item.variantName,
-              quantity: item.quantity,
-              unit_price: item.price,
-              image: item.image,
-            })),
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to place order");
-
-        if (!isBuyNow) {
-          clearCart();
-        }
-        router.push(`/order/${data.order_number}`);
-        return;
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to place order";
-        setErrorMessage(msg);
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
     try {
-      // ── Step 1: Load Razorpay script ────────────────────────────────────────
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        throw new Error("Could not load Razorpay. Please check your internet connection and try again.");
-      }
+      // ── Step 1: Create Order in DB (PENDING_PAYMENT) ──────────────────────
+      setStatusMessage("Creating your order...");
 
-      // ── Step 2: Create Razorpay order on server ──────────────────────────────
-      const createRes = await fetch("/api/payment/create-order", {
+      const orderRes = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Send items — server calculates the total from DB prices
+          customer_name: formData.customerName.trim(),
+          customer_phone: formData.customerPhone.trim(),
+          customer_email: formData.customerEmail.trim() || undefined,
+          shipping_address: {
+            address: formData.address.trim(),
+            city: formData.city.trim(),
+            state: formData.state.trim(),
+            pincode: formData.pincode.trim(),
+          },
           items: activeItems.map((item) => ({
             product_id: item.productId,
-            variant_id: item.variantId || undefined,
+            variant_id: item.variantId,
+            product_name: item.name,
+            variant_name: item.variantName,
             quantity: item.quantity,
+            unit_price: item.price,
+            image: item.image,
           })),
         }),
       });
 
-      const createData = await createRes.json();
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || "Failed to create order");
 
-      if (!createRes.ok) {
-        throw new Error(createData.error || "Failed to initiate payment. Please try again.");
+      const { order_id: orderId, order_number: orderNumber } = orderData;
+
+      // ── Step 2: Create Cashfree payment order ─────────────────────────────
+      setStatusMessage("Initiating secure payment...");
+
+      const payRes = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+
+      const payData = await payRes.json();
+      if (!payRes.ok) throw new Error(payData.error || "Failed to initiate payment");
+
+      const { payment_session_id } = payData;
+
+      // ── Step 3: Open Cashfree checkout ────────────────────────────────────
+      setStatusMessage("Opening payment gateway...");
+
+      // Clear cart before redirect (if not buy-now) — we've already created the order
+      if (!isBuyNow) {
+        clearCart();
       }
 
-      const { razorpay_order_id, key, amount } = createData;
+      // Use SDK if loaded, otherwise use CDN global
+      const sdk = cashfreeSdk as { checkout: (opts: Record<string, unknown>) => Promise<unknown> } | null;
 
-      // ── Step 3: Open Razorpay payment modal ─────────────────────────────────
-      await new Promise<void>((resolve, reject) => {
-        const rzp = new window.Razorpay({
-          key,
-          amount,
-          currency: "INR",
-          name: "Kushal's Mart",
-          description: `Order for ${activeItems.length} item(s)`,
-          image: "/logo.png",
-          order_id: razorpay_order_id,
-          prefill: {
-            name: formData.customerName,
-            email: formData.customerEmail || undefined,
-            contact: formData.customerPhone,
-          },
-          notes: {
-            address: formData.address,
-          },
-          theme: { color: "#DC2626" },
-
-          // ── Success: verify + create order in DB ─────────────────────────────
-          handler: async (response: unknown) => {
-            try {
-              const rzpResponse = response as {
-                razorpay_order_id: string;
-                razorpay_payment_id: string;
-                razorpay_signature: string;
-              };
-
-              const verifyRes = await fetch("/api/payment/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  razorpay_order_id: rzpResponse.razorpay_order_id,
-                  razorpay_payment_id: rzpResponse.razorpay_payment_id,
-                  razorpay_signature: rzpResponse.razorpay_signature,
-                  customer_name: formData.customerName.trim(),
-                  customer_phone: formData.customerPhone.trim(),
-                  customer_email: formData.customerEmail.trim() || undefined,
-                  shipping_address: {
-                    address: formData.address.trim(),
-                    city: formData.city.trim(),
-                    state: formData.state.trim(),
-                    pincode: formData.pincode.trim(),
-                  },
-                  items: activeItems.map((item) => ({
-                    product_id: item.productId,
-                    variant_id: item.variantId,
-                    product_name: item.name,
-                    variant_name: item.variantName,
-                    unit_price: item.price,
-                    quantity: item.quantity,
-                    image: item.image,
-                  })),
-                }),
-              });
-
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok) throw new Error(verifyData.error || "Payment verification failed");
-
-              // Only clear persistent cart if this was a normal cart checkout
-              if (!isBuyNow) {
-                clearCart();
-              }
-              resolve();
-              router.push(`/order/${verifyData.order_number}`);
-            } catch (err) {
-              reject(err);
-            }
-          },
-
-          // ── Modal closed without payment ─────────────────────────────────────
-          modal: {
-            ondismiss: () => {
-              reject(new Error("Payment cancelled. You can try again."));
-            },
-          },
+      if (sdk && typeof sdk.checkout === "function") {
+        await sdk.checkout({
+          paymentSessionId: payment_session_id,
+          redirectTarget: "_self",
         });
+      } else {
+        // Fallback: try CDN-loaded Cashfree global
+        const win = window as unknown as {
+          Cashfree?: (opts: { mode: string }) => { checkout: (opts: Record<string, unknown>) => Promise<unknown> };
+        };
 
-        rzp.open();
-      });
+        if (win.Cashfree) {
+          const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
+          const cf = win.Cashfree({ mode: cashfreeEnv });
+          await cf.checkout({
+            paymentSessionId: payment_session_id,
+            redirectTarget: "_self",
+          });
+        } else {
+          // Last resort: redirect to Cashfree payment page manually
+          // The return_url is already configured, so the user will come back after payment
+          throw new Error("Payment gateway could not be loaded. Please refresh and try again.");
+        }
+      }
+
+      // If checkout returns (modal mode), redirect to confirmation
+      router.push(`/order/${orderNumber}`);
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Payment failed. Please try again.";
       setErrorMessage(message);
+      setStatusMessage("");
     } finally {
       setIsSubmitting(false);
     }
@@ -370,7 +301,7 @@ function CheckoutContent() {
                 Shipping &amp; Contact Details
               </h1>
               <p className="text-xs text-gray-500 font-medium mt-1">
-                Enter your details. You&apos;ll be taken to Razorpay to complete secure payment.
+                Enter your details. You&apos;ll be taken to our secure payment gateway to complete payment.
               </p>
             </div>
 
@@ -378,6 +309,13 @@ function CheckoutContent() {
               <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 border border-red-200">
                 <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                 <p className="text-xs font-bold text-red-700">{errorMessage}</p>
+              </div>
+            )}
+
+            {statusMessage && !errorMessage && (
+              <div className="flex items-center gap-3 rounded-2xl bg-blue-50 p-4 border border-blue-200">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent shrink-0" />
+                <p className="text-xs font-bold text-blue-700">{statusMessage}</p>
               </div>
             )}
 
@@ -467,58 +405,6 @@ function CheckoutContent() {
               </div>
             </div>
 
-            {/* 3. Payment Method */}
-            <div className="space-y-4 pt-4 border-t border-gray-100">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2">
-                3. Payment Method
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode("online")}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMode === "online"
-                      ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/20 shadow-xs"
-                      : "border-gray-200 bg-white hover:border-gray-300"
-                  }`}
-                >
-                  <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    paymentMode === "online" ? "border-red-600 bg-red-600" : "border-gray-300"
-                  }`}>
-                    {paymentMode === "online" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                  </div>
-                  <div>
-                    <span className="text-xs font-extrabold text-gray-900 block">Online Payment (Instant)</span>
-                    <span className="text-[11px] font-medium text-gray-500 block mt-0.5">
-                      UPI, Cards, NetBanking via Razorpay
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode("cod")}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMode === "cod"
-                      ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/20 shadow-xs"
-                      : "border-gray-200 bg-white hover:border-gray-300"
-                  }`}
-                >
-                  <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                    paymentMode === "cod" ? "border-red-600 bg-red-600" : "border-gray-300"
-                  }`}>
-                    {paymentMode === "cod" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                  </div>
-                  <div>
-                    <span className="text-xs font-extrabold text-gray-900 block">Cash on Delivery / Test Order</span>
-                    <span className="text-[11px] font-medium text-gray-500 block mt-0.5">
-                      Pay on delivery · Instant test order placement
-                    </span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
             {/* Trust signals */}
             <div className="flex flex-wrap gap-4 pt-2 border-t border-gray-100">
               {[
@@ -598,16 +484,12 @@ function CheckoutContent() {
               <span>
                 {isSubmitting
                   ? "PROCESSING..."
-                  : paymentMode === "cod"
-                  ? `PLACE ORDER (${formatPrice(activeSubtotal)} · PAY ON DELIVERY)`
                   : `PAY ${formatPrice(activeSubtotal)} SECURELY`}
               </span>
             </button>
 
             <p className="text-[10px] font-semibold text-gray-400 text-center">
-              {paymentMode === "online"
-                ? "Powered by Razorpay · UPI, Cards, Net Banking accepted"
-                : "Cash on Delivery selected · Order will be confirmed immediately"}
+              Powered by Cashfree Payments · UPI, Cards, Net Banking accepted
             </p>
           </div>
 

@@ -95,12 +95,12 @@ model Order {
   discount          Int         @default(0) // paise
   total             Int         // paise
   paymentStatus     String      // PENDING | PAID | FAILED | NOT_APPLICABLE
-  razorpayOrderId   String?     // convenience lookup (Payment table is source of truth)
-  razorpayPaymentId String?     // convenience lookup
-  shiprocketAwb     String?     // pasted in manually by admin
+  razorpayOrderId   String?     // LEGACY — kept for historical data, not written by new code
+  razorpayPaymentId String?     // LEGACY — kept for historical data, not written by new code
+  shiprocketAwb     String?     // also used for Delhivery waybill
   courierName       String?
   items             OrderItem[]
-  payments          Payment[]
+  payments          CashfreePayment[]
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -127,23 +127,25 @@ model OrderItem {
   @@index([orderId])
 }
 
-// Dedicated payment audit trail — source of truth for all payment events.
-// The flat razorpayOrderId/razorpayPaymentId on Order are convenience lookups only.
-model Payment {
-  id                String   @id @default(cuid())
-  orderId           String
-  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  razorpayOrderId   String   @unique
-  razorpayPaymentId String?  @unique
-  amount            Int      // paise — must match Order.total
-  currency          String   @default("INR")
-  status            String   @default("created") // created | authorized | captured | failed | refunded | partially_refunded
-  failureReason     String?
-  rawWebhookPayload Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+// Cashfree payment audit trail — source of truth for all payment events.
+// Maps to the lowercase "payments" table (old Razorpay "Payment" was renamed to "PaymentLegacy").
+model CashfreePayment {
+  id                String    @id @default(uuid()) @db.Uuid
+  orderId           String    @map("order_id")
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cashfreeOrderId   String    @unique @map("cashfree_order_id") // our orderNumber sent to Cashfree
+  cfPaymentId       String?   @unique @map("cf_payment_id")     // set once payment completes
+  paymentSessionId  String?   @map("payment_session_id")
+  amount            Int       // paise — must match Order.total
+  currency          String    @default("INR")
+  status            String    @default("created") // created | active | paid | failed | refunded | partially_refunded | expired
+  failureReason     String?   @map("failure_reason")
+  rawWebhookPayload Json?     @map("raw_webhook_payload")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @map("updated_at")
 
   @@index([orderId])
+  @@map("payments")
 }
 
 model AdminUser {
