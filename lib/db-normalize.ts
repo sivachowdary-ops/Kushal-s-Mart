@@ -101,6 +101,7 @@ export function normalizeProduct(p: Record<string, unknown>) {
 
 export function toProductDB(body: Record<string, unknown>) {
   const row: Record<string, unknown> = {
+    id: (body.id as string) || `prod-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
     name: body.name,
     slug: body.slug,
     description: body.description || "",

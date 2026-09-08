@@ -36,6 +36,7 @@ export async function PUT(
 
     // CHANGED: "products"→"Product", column names converted to camelCase
     const dbRow = toProductDB(productBody);
+    delete dbRow.id; // Do not overwrite existing ID on update
     const { error: productError } = await supabaseAdmin
       .from("Product")
       .update(dbRow)
