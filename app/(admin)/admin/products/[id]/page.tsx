@@ -216,7 +216,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Slug *</label>
-                  <input required type="text" value={slug} onChange={(e) => setSlug(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500" />
+                  <input required type="text" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/(^-|-$)+/g, "").replace(/-{2,}/g, "-"))} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>

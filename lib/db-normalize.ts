@@ -131,6 +131,14 @@ export function toProductDB(body: Record<string, unknown>) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)+/g, "");
   }
+  // Always sanitize slug — prevent spaces or invalid characters from ever reaching the DB
+  if (row.slug) {
+    row.slug = (row.slug as string)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-{2,}/g, "-")
+      .replace(/(^-|-$)+/g, "");
+  }
   return row;
 }
 
