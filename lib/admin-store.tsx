@@ -330,13 +330,15 @@ export function AdminStoreProvider({
           setProducts((prev) => [newProduct, ...prev]);
           return newProduct;
         } else {
-          const err = await res.json();
-          console.error("Failed to add product:", err);
+          const err = await res.json().catch(() => ({}));
+          const message = err.error || err.message || `Server error (${res.status})`;
+          console.error("Failed to add product:", message);
+          throw new Error(message);
         }
       } catch (e) {
         console.error("Failed to add product:", e);
+        throw e;
       }
-      return null;
     },
     []
   );

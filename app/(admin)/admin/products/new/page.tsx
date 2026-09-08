@@ -87,7 +87,8 @@ export default function NewProductPage() {
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to add product");
+      const msg = error instanceof Error ? error.message : "Failed to add product";
+      alert(msg);
     } finally {
       setIsSubmitting(false);
     }
