@@ -122,6 +122,7 @@ export default function CartPage() {
               {/* Proceed to Checkout Button */}
               <Link
                 href="/checkout"
+                prefetch={true}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-xl transition-all duration-300 hover:bg-red-700 hover:scale-[1.02] active:scale-95"
               >
                 <span>PROCEED TO CHECKOUT</span>

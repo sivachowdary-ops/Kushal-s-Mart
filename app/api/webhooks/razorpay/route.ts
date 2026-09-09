@@ -256,9 +256,11 @@ export async function POST(request: Request) {
       if (razorpayOrderId) {
         const { data: paymentRow } = await supabaseAdmin
           .from("payments")
-          .select("id")
+          .select("id, order_id")
           .eq("razorpay_order_id", razorpayOrderId)
           .maybeSingle();
+
+        const now = new Date().toISOString();
 
         if (paymentRow) {
           await supabaseAdmin
@@ -267,14 +269,34 @@ export async function POST(request: Request) {
               status: "failed",
               failure_reason: failureReason,
               raw_webhook_payload: event,
-              updated_at: new Date().toISOString(),
+              updated_at: now,
             })
             .eq("id", paymentRow.id);
         }
 
-        // Leave Order as PENDING_PAYMENT — customer can retry
+        // Update Order table so Admin dashboard and customer tracking reflect the failure immediately
+        if (paymentRow?.order_id) {
+          await supabaseAdmin
+            .from("Order")
+            .update({
+              status: "PAYMENT_FAILED",
+              paymentStatus: "FAILED",
+              updatedAt: now,
+            })
+            .eq("id", paymentRow.order_id);
+        } else {
+          await supabaseAdmin
+            .from("Order")
+            .update({
+              status: "PAYMENT_FAILED",
+              paymentStatus: "FAILED",
+              updatedAt: now,
+            })
+            .eq("razorpayOrderId", razorpayOrderId);
+        }
+
         console.log(
-          `[Razorpay Webhook] Payment failed for order ${razorpayOrderId}: ${failureReason}`
+          `[Razorpay Webhook] Order marked as PAYMENT_FAILED for ${razorpayOrderId}: ${failureReason}`
         );
       }
     }

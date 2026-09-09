@@ -317,6 +317,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <label className="block text-sm font-medium text-slate-700 mb-1">Current Status</label>
                 <select value={status} onChange={e => setStatus(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500 font-medium">
                   <option value="PENDING">PENDING</option>
+                  <option value="PENDING_PAYMENT">PENDING_PAYMENT</option>
+                  <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
                   <option value="PROCESSING">PROCESSING</option>
                   <option value="SHIPPED">SHIPPED</option>
                   <option value="DELIVERED">DELIVERED</option>
@@ -367,7 +369,26 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               </div>
               <div>
                 <div className="text-slate-500 text-xs">Payment Status</div>
-                <div className="font-medium text-slate-900">{order.payment_status}</div>
+                <div className="mt-1">
+                  {order.payment_status === "PAID" ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      ✓ PAID
+                    </span>
+                  ) : order.payment_status === "FAILED" || order.status === "PAYMENT_FAILED" ? (
+                    <div className="space-y-1.5">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-300">
+                        ✕ PAYMENT FAILED
+                      </span>
+                      <p className="text-[11px] text-red-600 font-medium">
+                        Customer payment attempt was declined or failed at gateway.
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      {order.payment_status || "PENDING"}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

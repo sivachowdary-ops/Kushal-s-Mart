@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShieldCheck, Lock, Truck, ArrowLeft, ShoppingBag, CreditCard, AlertCircle, Zap } from "lucide-react";
+import { ShieldCheck, Lock, Truck, ArrowLeft, ShoppingBag, CreditCard, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
 
@@ -91,6 +91,11 @@ function CheckoutContent() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [paymentFailedInfo, setPaymentFailedInfo] = useState<{
+    failed: boolean;
+    reason?: string;
+  } | null>(null);
 
   // Preload Razorpay Checkout script on mount
   const [razorpayReady, setRazorpayReady] = useState(false);
@@ -117,6 +122,7 @@ function CheckoutContent() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setPaymentFailedInfo(null);
 
     // Validation
     if (!formData.customerName || !formData.customerPhone || !formData.address || !formData.city || !formData.pincode) {
@@ -169,6 +175,7 @@ function CheckoutContent() {
       if (!orderRes.ok) throw new Error(orderData.error || "Failed to create order");
 
       const { order_id: orderId, order_number: orderNumber } = orderData;
+      router.prefetch(`/order/${orderNumber}`);
       let razorpayOrderId = orderData.razorpay_order_id;
       let amount = orderData.amount;
       let currency = orderData.currency || "INR";
@@ -196,7 +203,7 @@ function CheckoutContent() {
 
       // ── Step 2: Open Razorpay Checkout popup ──────────────────────────────
       const RazorpayConstructor = (window as unknown as {
-        Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (event: string, cb: () => void) => void };
+        Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (event: string, cb: (...args: unknown[]) => void) => void };
       }).Razorpay;
 
       if (!RazorpayConstructor) {
@@ -238,6 +245,9 @@ function CheckoutContent() {
                 return;
               }
 
+              // Set success state BEFORE clearing cart so empty cart screen NEVER renders!
+              setIsSuccess(true);
+
               // Clear cart before redirect (if not buy-now)
               if (!isBuyNow) {
                 clearCart();
@@ -249,15 +259,49 @@ function CheckoutContent() {
             }
           },
           modal: {
-            ondismiss: () => {
-              reject(new Error("Payment was cancelled. Your order is saved — you can retry anytime."));
+            ondismiss: async () => {
+              const reason = "Payment was cancelled or closed before completing.";
+              setPaymentFailedInfo({
+                failed: true,
+                reason: "Payment window was closed. No money was deducted. You can retry anytime with UPI, Card, or Net Banking.",
+              });
+
+              try {
+                await fetch("/api/payments/fail", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ orderId, reason }),
+                });
+              } catch {
+                // non-blocking
+              }
+
+              reject(new Error("Payment was cancelled. Your order is saved — click below to retry."));
             },
           },
         };
 
         const rzp = new RazorpayConstructor(options);
-        rzp.on("payment.failed", () => {
-          reject(new Error("Payment failed. Please try again with a different payment method."));
+        rzp.on("payment.failed", async (response: unknown) => {
+          const rzpErr = (response as { error?: { description?: string; reason?: string } })?.error;
+          const reason = rzpErr?.description || rzpErr?.reason || "Payment failed or was declined by the bank.";
+
+          setPaymentFailedInfo({
+            failed: true,
+            reason,
+          });
+
+          try {
+            await fetch("/api/payments/fail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId, reason }),
+            });
+          } catch {
+            // non-blocking
+          }
+
+          reject(new Error(reason));
         });
         rzp.open();
       });
@@ -272,6 +316,29 @@ function CheckoutContent() {
       setIsSubmitting(false);
     }
   };
+
+  // Dedicated Success screen while transitioning to /order/[orderNumber]
+  // Completely eliminates any flash of "Your Cart is Empty" or empty catalog screen!
+  if (isSuccess) {
+    return (
+      <div className="bg-[#F4F5F7] min-h-screen flex items-center justify-center py-16 px-4">
+        <div className="mx-auto max-w-md w-full bg-white rounded-3xl p-10 border border-gray-200/80 shadow-sm text-center space-y-5 animate-fade-in">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mx-auto">
+            <CheckCircle2 className="h-9 w-9 text-emerald-600 animate-bounce" />
+          </div>
+          <div>
+            <h2 className="font-extrabold text-2xl text-gray-900">Payment Successful!</h2>
+            <p className="text-xs text-gray-500 mt-1.5 font-medium">
+              Taking you to your order confirmation and tracking...
+            </p>
+          </div>
+          <div className="h-1.5 w-36 bg-gray-100 rounded-full overflow-hidden mx-auto">
+            <div className="h-full bg-emerald-500 rounded-full animate-pulse w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isLoaded && !isBuyNow) {
     return (
@@ -334,7 +401,36 @@ function CheckoutContent() {
               </p>
             </div>
 
-            {errorMessage && (
+            {paymentFailedInfo?.failed && (
+              <div className="rounded-2xl border-2 border-red-200 bg-red-50/90 p-5 text-red-900 shadow-sm space-y-3 animate-fade-in">
+                <div className="flex items-start gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600 shrink-0 mt-0.5">
+                    <AlertCircle className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <h3 className="font-extrabold text-sm text-red-900">
+                      Payment Unsuccessful
+                    </h3>
+                    <p className="text-xs text-red-700 leading-relaxed font-medium">
+                      {paymentFailedInfo.reason}
+                    </p>
+                    <p className="text-[11px] font-semibold text-red-600">
+                      ✓ No money was deducted from your account. Your cart and shipping details are safe.
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-1">
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
+                  >
+                    Try Payment Again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {errorMessage && !paymentFailedInfo?.failed && (
               <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 border border-red-200">
                 <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                 <p className="text-xs font-bold text-red-700">{errorMessage}</p>

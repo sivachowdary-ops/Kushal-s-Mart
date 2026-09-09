@@ -1,24 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { X, Trash2, ShoppingBag, Plus, Minus, ArrowRight, ShieldCheck } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
 
 export function CartDrawer() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isNavigating, setIsNavigating] = useState(false);
   const { cartItems, cartCount, subtotal, isCartOpen, closeCart, updateQuantity, removeFromCart } = useCart();
+
+  // Prefetch /checkout so navigation transitions immediately
+  useEffect(() => {
+    if (isCartOpen) {
+      router.prefetch("/checkout");
+    }
+  }, [isCartOpen, router]);
+
+  // Only close drawer once /checkout has mounted, eliminating any background page flash
+  useEffect(() => {
+    if (pathname === "/checkout") {
+      closeCart();
+      setIsNavigating(false);
+    }
+  }, [pathname, closeCart]);
 
   const handleProceedToCheckout = () => {
     setIsNavigating(true);
     router.push("/checkout");
-    setTimeout(() => {
-      closeCart();
-      setIsNavigating(false);
-    }, 400);
   };
 
   if (!isCartOpen) return null;

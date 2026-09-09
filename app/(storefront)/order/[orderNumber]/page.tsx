@@ -89,8 +89,8 @@ export default function OrderConfirmationPage({
       const data: OrderStatus = await res.json();
       setOrderStatus(data);
 
-      // If payment is confirmed, stop polling and fetch full order
-      if (data.paymentStatus === "PAID" || data.paymentStatus === "FAILED") {
+      // If payment is confirmed or failed, stop polling
+      if (data.paymentStatus === "PAID" || data.paymentStatus === "FAILED" || data.status === "PAYMENT_FAILED") {
         setIsPolling(false);
       }
     } catch {
@@ -213,7 +213,7 @@ export default function OrderConfirmationPage({
   }
 
   // ── Payment failed ──────────────────────────────────────────────────────
-  if (orderStatus.paymentStatus === "FAILED") {
+  if (orderStatus.paymentStatus === "FAILED" || orderStatus.status === "PAYMENT_FAILED") {
     return (
       <div className="bg-[#F4F5F7] min-h-screen py-16">
         <div className="mx-auto max-w-xl px-4">
