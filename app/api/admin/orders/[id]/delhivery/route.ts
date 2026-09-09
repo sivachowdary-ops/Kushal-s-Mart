@@ -27,6 +27,20 @@ export async function POST(
     }
 
     const order = normalizeOrder(rawOrder);
+
+    // Prevent duplicate dispatch attempts if AWB already generated
+    if (order.shiprocket_awb) {
+      return NextResponse.json(
+        {
+          success: true,
+          waybill: order.shiprocket_awb,
+          courierName: order.courier_name || "Delhivery Express",
+          message: "Shipment already exists for this order.",
+        },
+        { status: 200 }
+      );
+    }
+
     const shippingAddress = order.shipping_address as {
       address?: string;
       city?: string;
@@ -43,6 +57,7 @@ export async function POST(
 
     // Call Delhivery Dispatch API
     const result = await createDelhiveryShipment({
+      orderId: id,
       orderNumber: order.order_number,
       customerName: order.customer_name || "Valued Customer",
       customerPhone: order.customer_phone || "9999999999",
@@ -59,7 +74,7 @@ export async function POST(
         unitPrice: i.unit_price,
       })),
       totalAmount: order.total,
-      paymentMode: order.payment_mode || "prepaid",
+      paymentMode: "prepaid",
     });
 
     if (!result.success || !result.waybill) {

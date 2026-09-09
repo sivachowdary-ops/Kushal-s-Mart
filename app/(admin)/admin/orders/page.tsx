@@ -19,7 +19,12 @@ export default function OrdersPage() {
     const matchesSearch = 
       (o.order_number && o.order_number.toLowerCase().includes(search.toLowerCase())) ||
       (o.customer_name && o.customer_name.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === "ALL" || o.status === statusFilter;
+    
+    let matchesStatus = statusFilter === "ALL" || o.status === statusFilter;
+    if (statusFilter === "NEEDS_SHIPMENT") {
+      matchesStatus = (o.payment_status === "PAID" || o.status === "PAID") && !o.shiprocket_awb;
+    }
+
     const matchesChannel = channelFilter === "ALL" || o.channel === channelFilter;
     return matchesSearch && matchesStatus && matchesChannel;
   });
@@ -38,6 +43,7 @@ export default function OrdersPage() {
       case 'PENDING_PAYMENT': return 'bg-amber-50 text-amber-800 ring-amber-600/20';
       case 'PAYMENT_FAILED':
       case 'FAILED': return 'bg-red-100 text-red-800 ring-red-600/30';
+      case 'PACKED': return 'bg-purple-50 text-purple-700 ring-purple-600/20';
       case 'PROCESSING': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
       case 'SHIPPED': return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
       case 'DELIVERED': return 'bg-green-50 text-green-700 ring-green-600/20';
@@ -88,6 +94,8 @@ export default function OrdersPage() {
               className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="ALL">All Statuses</option>
+              <option value="NEEDS_SHIPMENT">📦 Needs Shipment (Paid, No AWB)</option>
+              <option value="PACKED">Packed (AWB Generated)</option>
               <option value="PENDING">Pending</option>
               <option value="PENDING_PAYMENT">Pending Payment</option>
               <option value="PAYMENT_FAILED">Payment Failed</option>
@@ -162,9 +170,21 @@ export default function OrdersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getStatusColor(order.status)}`}>
-                        {order.status === "PAYMENT_FAILED" ? "PAYMENT FAILED" : order.status === "PENDING_PAYMENT" ? "PENDING PAYMENT" : order.status}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getStatusColor(order.status)}`}>
+                          {order.status === "PAYMENT_FAILED" ? "PAYMENT FAILED" : order.status === "PENDING_PAYMENT" ? "PENDING PAYMENT" : order.status}
+                        </span>
+                        {(order.payment_status === "PAID" || order.status === "PAID") && !order.shiprocket_awb && order.channel !== "OFFLINE" && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                            NEEDS DISPATCH
+                          </span>
+                        )}
+                        {order.shiprocket_awb && (
+                          <span className="text-[10px] font-mono text-slate-500">
+                            AWB: {order.shiprocket_awb}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 font-medium text-slate-900">
                       ₹{(order.total / 100).toLocaleString("en-IN")}

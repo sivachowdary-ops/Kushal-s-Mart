@@ -16,6 +16,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [awb, setAwb] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDispatchingDelhivery, setIsDispatchingDelhivery] = useState(false);
+  const [isCancellingDelhivery, setIsCancellingDelhivery] = useState(false);
   const [delhiverySuccessMsg, setDelhiverySuccessMsg] = useState<string | null>(null);
 
   // Refund state
@@ -50,17 +51,43 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCourierName("Delhivery Express");
+        setCourierName(data.courierName || "Delhivery Express");
         setAwb(data.waybill);
         setDelhiverySuccessMsg(`✓ Dispatched with Delhivery! AWB: ${data.waybill}`);
         await refreshOrders();
       } else {
         alert(data.error || "Failed to dispatch with Delhivery");
       }
-    } catch (err: unknown) {
+    } catch {
       alert("Failed to connect to Delhivery dispatch service");
     } finally {
       setIsDispatchingDelhivery(false);
+    }
+  };
+
+  const handleCancelDelhivery = async () => {
+    if (!order || !order.shiprocket_awb) return;
+    if (!confirm(`Are you sure you want to cancel Delhivery shipment AWB ${order.shiprocket_awb}?`)) return;
+
+    setIsCancellingDelhivery(true);
+    setDelhiverySuccessMsg(null);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/delhivery/cancel`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCourierName("");
+        setAwb("");
+        setDelhiverySuccessMsg("✓ Delhivery shipment was cancelled successfully.");
+        await refreshOrders();
+      } else {
+        alert(data.error || "Failed to cancel Delhivery shipment");
+      }
+    } catch {
+      alert("Failed to connect to Delhivery cancel service");
+    } finally {
+      setIsCancellingDelhivery(false);
     }
   };
 
@@ -278,15 +305,44 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </p>
               )}
 
-              <button
-                type="button"
-                onClick={handleDispatchDelhivery}
-                disabled={isDispatchingDelhivery}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-sm cursor-pointer active:scale-95"
-              >
-                <Truck className="h-4 w-4" />
-                <span>{isDispatchingDelhivery ? "Connecting to Delhivery.com..." : "Send to Delhivery.com (Auto AWB)"}</span>
-              </button>
+              {order.shiprocket_awb ? (
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <a
+                    href={`https://www.delhivery.com/track/package/${order.shiprocket_awb}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+                  >
+                    <span>Track Live on Delhivery.com</span>
+                    <span>↗</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCancelDelhivery}
+                    disabled={isCancellingDelhivery}
+                    className="px-4 py-3 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {isCancellingDelhivery ? "Cancelling..." : "Cancel Shipment"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {(order.payment_status === "PAID" || order.status === "PAID") && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
+                      ⚡ Payment Confirmed: Ready for automatic / 1-click Delhivery dispatch.
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleDispatchDelhivery}
+                    disabled={isDispatchingDelhivery}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <Truck className="h-4 w-4" />
+                    <span>{isDispatchingDelhivery ? "Connecting to Delhivery.com..." : "Dispatch with Delhivery Express (Generate AWB)"}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Manual Shipping Override */}

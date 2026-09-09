@@ -100,6 +100,7 @@ export async function GET(request: Request) {
       courier_name: o.courierName,
       shiprocket_awb: o.shiprocketAwb,
       tracking_awb: o.shiprocketAwb,
+      tracking_url: o.shiprocketAwb ? `https://www.delhivery.com/track/package/${o.shiprocketAwb}` : null,
       created_at: createdAt,
       timeline,
       items: rawItems,

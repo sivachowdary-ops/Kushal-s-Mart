@@ -183,7 +183,7 @@ export async function POST(request: Request) {
           .eq("id", internalOrderId)
           .single();
 
-        if (fullOrder) {
+        if (fullOrder && !fullOrder.shiprocketAwb) {
           const shippingAddr = (fullOrder.shippingAddress || {}) as {
             address?: string;
             city?: string;
@@ -200,6 +200,7 @@ export async function POST(request: Request) {
           );
 
           const result = await createDelhiveryShipment({
+            orderId: internalOrderId,
             orderNumber: fullOrder.orderNumber,
             customerName: fullOrder.customerName,
             customerPhone: fullOrder.customerPhone,
@@ -228,6 +229,10 @@ export async function POST(request: Request) {
 
             console.log(
               `[Razorpay Webhook] Delhivery shipment created: AWB ${result.waybill}`
+            );
+          } else {
+            console.warn(
+              `[Razorpay Webhook] Delhivery shipment booking noted: ${result.error || "Awaiting admin manual dispatch"}`
             );
           }
         }
