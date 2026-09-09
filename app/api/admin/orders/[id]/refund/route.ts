@@ -31,35 +31,43 @@ export async function POST(
     }
 
     // Look up the paid payment for this order
-    const { data: paymentRow, error: payErr } = await supabaseAdmin
+    const { data: paymentRow } = await supabaseAdmin
       .from("payments")
       .select("*")
       .eq("order_id", id)
       .eq("status", "paid")
       .maybeSingle();
 
-    if (payErr || !paymentRow) {
+    let razorpayPaymentId = paymentRow?.razorpay_payment_id;
+    let maxRefundAmount = paymentRow?.amount;
+
+    if (!razorpayPaymentId) {
+      // Fallback: look up in Order table directly
+      const { data: orderRow } = await supabaseAdmin
+        .from("Order")
+        .select("razorpayPaymentId, total, paymentStatus")
+        .eq("id", id)
+        .single();
+
+      if (orderRow?.razorpayPaymentId && orderRow.paymentStatus === "PAID") {
+        razorpayPaymentId = orderRow.razorpayPaymentId;
+        maxRefundAmount = orderRow.total;
+      }
+    }
+
+    if (!razorpayPaymentId || !maxRefundAmount) {
       return NextResponse.json(
-        { error: "No paid payment found for this order" },
+        { error: "No paid payment or Razorpay payment ID found for this order" },
         { status: 400 }
       );
     }
 
     // Validate refund doesn't exceed paid amount
-    if (amount > paymentRow.amount) {
+    if (amount > maxRefundAmount) {
       return NextResponse.json(
         {
-          error: `Refund amount (₹${(amount / 100).toFixed(2)}) exceeds paid amount (₹${(paymentRow.amount / 100).toFixed(2)})`,
+          error: `Refund amount (₹${(amount / 100).toFixed(2)}) exceeds paid amount (₹${(maxRefundAmount / 100).toFixed(2)})`,
         },
-        { status: 400 }
-      );
-    }
-
-    // Razorpay refunds require the payment_id (not order_id)
-    const razorpayPaymentId = paymentRow.razorpay_payment_id;
-    if (!razorpayPaymentId) {
-      return NextResponse.json(
-        { error: "No Razorpay payment ID found — cannot process refund" },
         { status: 400 }
       );
     }

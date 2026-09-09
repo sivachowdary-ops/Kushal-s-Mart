@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     // 1. Look up the Order — it must exist and be PENDING_PAYMENT
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("Order")
-      .select("id, orderNumber, total, customerName, customerPhone, customerEmail, status")
+      .select("id, orderNumber, total, customerName, customerPhone, customerEmail, status, razorpayOrderId")
       .eq("id", orderId)
       .single();
 
@@ -37,23 +37,35 @@ export async function POST(request: Request) {
     }
 
     // 2. Idempotency: check if a valid Razorpay order already exists for this Order
-    const { data: existingPayment } = await supabaseAdmin
-      .from("payments")
-      .select("razorpay_order_id, status")
-      .eq("order_id", orderId)
-      .in("status", ["created", "active"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingPayment?.razorpay_order_id) {
-      // Reuse existing Razorpay order instead of creating a duplicate
+    if (order.razorpayOrderId) {
       return NextResponse.json({
-        razorpay_order_id: existingPayment.razorpay_order_id,
+        razorpay_order_id: order.razorpayOrderId,
         amount: order.total,
         currency: "INR",
         key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
       });
+    }
+
+    try {
+      const { data: existingPayment } = await supabaseAdmin
+        .from("payments")
+        .select("razorpay_order_id, status")
+        .eq("order_id", orderId)
+        .in("status", ["created", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPayment?.razorpay_order_id) {
+        return NextResponse.json({
+          razorpay_order_id: existingPayment.razorpay_order_id,
+          amount: order.total,
+          currency: "INR",
+          key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        });
+      }
+    } catch (checkErr) {
+      console.warn("[Razorpay] payments idempotency check warning:", checkErr);
     }
 
     // 3. Amount in paise — Razorpay uses paise, which matches our DB directly!
@@ -72,27 +84,33 @@ export async function POST(request: Request) {
       },
     });
 
-    // 5. Store payment record in our DB
-    const { error: insertErr } = await supabaseAdmin
-      .from("payments")
-      .insert([{
-        order_id: orderId,
-        razorpay_order_id: rzpOrder.id,
-        razorpay_payment_id: null,
-        amount: order.total, // paise (matches Order.total)
-        currency: "INR",
-        status: "created",
-      }]);
+    // 5. Always record razorpayOrderId on the Order row
+    await supabaseAdmin
+      .from("Order")
+      .update({ razorpayOrderId: rzpOrder.id })
+      .eq("id", orderId);
 
-    if (insertErr) {
-      console.error("[Razorpay] Failed to insert payment row:", insertErr);
-      return NextResponse.json(
-        { error: "Failed to record payment. Please try again." },
-        { status: 500 }
-      );
+    // 6. Record payment in the payments audit table (non-blocking if permissions pending)
+    try {
+      const { error: insertErr } = await supabaseAdmin
+        .from("payments")
+        .insert([{
+          order_id: orderId,
+          razorpay_order_id: rzpOrder.id,
+          razorpay_payment_id: null,
+          amount: order.total, // paise (matches Order.total)
+          currency: "INR",
+          status: "created",
+        }]);
+
+      if (insertErr) {
+        console.warn("[Razorpay] payments table record warning:", insertErr.message);
+      }
+    } catch (auditErr) {
+      console.warn("[Razorpay] payments audit table error:", auditErr);
     }
 
-    // 6. Return order details to client — key_id is the PUBLIC key, safe to expose
+    // 7. Return order details to client — key_id is the PUBLIC key, safe to expose
     return NextResponse.json({
       razorpay_order_id: rzpOrder.id,
       amount: rzpOrder.amount,

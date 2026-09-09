@@ -46,8 +46,10 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_payments_order ON public.payments (order_id);
 
--- 2. Enable Row Level Security (service_role only, no anon public access)
+-- 2. Enable Row Level Security and grant table permissions
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.payments TO service_role;
+GRANT ALL ON TABLE public.payments TO postgres;
 
 -- 3. Atomic stock decrement function — prevents race conditions
 --    Returns TRUE if stock was successfully decremented, FALSE if insufficient stock

@@ -50,50 +50,80 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true }, { status: 200 });
       }
 
-      // ── 5a. Look up our payments row ────────────────────────────────────
-      const { data: paymentRow, error: payLookupErr } = await supabaseAdmin
+      // ── 5a. Look up payment or order ───────────────────────────────────
+      let internalOrderId: string | null = null;
+      let isDuplicate = false;
+
+      const { data: paymentRow } = await supabaseAdmin
         .from("payments")
         .select("*")
         .eq("razorpay_order_id", razorpayOrderId)
         .maybeSingle();
 
-      if (payLookupErr || !paymentRow) {
+      if (paymentRow) {
+        internalOrderId = paymentRow.order_id;
+        if (
+          paymentRow.status === "paid" &&
+          paymentRow.razorpay_payment_id === razorpayPaymentId
+        ) {
+          isDuplicate = true;
+        }
+      } else {
+        // Fallback: look up in Order table directly by razorpayOrderId
+        const { data: orderRow } = await supabaseAdmin
+          .from("Order")
+          .select("id, status, paymentStatus")
+          .eq("razorpayOrderId", razorpayOrderId)
+          .maybeSingle();
+
+        if (orderRow) {
+          internalOrderId = orderRow.id;
+          if (orderRow.status === "PAID" || orderRow.paymentStatus === "PAID") {
+            isDuplicate = true;
+          }
+        }
+      }
+
+      if (!internalOrderId) {
         console.warn(
-          "[Razorpay Webhook] No payments row found for razorpay_order_id:",
+          "[Razorpay Webhook] No order found for razorpay_order_id:",
           razorpayOrderId
         );
         return NextResponse.json({ success: true }, { status: 200 });
       }
 
       // ── 5b. Idempotency check ───────────────────────────────────────────
-      if (
-        paymentRow.status === "paid" &&
-        paymentRow.razorpay_payment_id === razorpayPaymentId
-      ) {
+      if (isDuplicate) {
         console.log("[Razorpay Webhook] Duplicate — already processed, no-op");
         return NextResponse.json({ success: true }, { status: 200 });
       }
 
-      const internalOrderId: string = paymentRow.order_id;
       const now = new Date().toISOString();
 
-      // ── 5c. Update payments row ─────────────────────────────────────────
-      await supabaseAdmin
-        .from("payments")
-        .update({
-          status: "paid",
-          razorpay_payment_id: razorpayPaymentId,
-          raw_webhook_payload: event,
-          updated_at: now,
-        })
-        .eq("id", paymentRow.id);
+      // ── 5c. Update payments row if present ──────────────────────────────
+      if (paymentRow) {
+        try {
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              status: "paid",
+              razorpay_payment_id: razorpayPaymentId,
+              raw_webhook_payload: event,
+              updated_at: now,
+            })
+            .eq("id", paymentRow.id);
+        } catch (payUpdateErr) {
+          console.warn("[Razorpay Webhook] payments table update warning:", payUpdateErr);
+        }
+      }
 
-      // ── 5d. Update Order status ─────────────────────────────────────────
+      // ── 5d. Update Order status and razorpayPaymentId ───────────────────
       await supabaseAdmin
         .from("Order")
         .update({
           status: "PAID",
           paymentStatus: "PAID",
+          razorpayPaymentId: razorpayPaymentId,
           updatedAt: now,
         })
         .eq("id", internalOrderId);
