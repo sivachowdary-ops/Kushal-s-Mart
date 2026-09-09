@@ -37,12 +37,17 @@ export async function POST(request: Request) {
     }
 
     // 2. Idempotency: check if a valid Razorpay order already exists for this Order
+    const key_id =
+      process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID ||
+      "rzp_test_TXBDtvZGtRuyZn";
+
     if (order.razorpayOrderId) {
       return NextResponse.json({
         razorpay_order_id: order.razorpayOrderId,
         amount: order.total,
         currency: "INR",
-        key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key_id,
       });
     }
 
@@ -61,7 +66,7 @@ export async function POST(request: Request) {
           razorpay_order_id: existingPayment.razorpay_order_id,
           amount: order.total,
           currency: "INR",
-          key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+          key_id,
         });
       }
     } catch (checkErr) {
@@ -115,7 +120,7 @@ export async function POST(request: Request) {
       razorpay_order_id: rzpOrder.id,
       amount: rzpOrder.amount,
       currency: rzpOrder.currency,
-      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      key_id,
     });
 
   } catch (err: unknown) {

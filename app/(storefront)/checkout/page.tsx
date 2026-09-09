@@ -91,7 +91,6 @@ function CheckoutContent() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
 
   // Preload Razorpay Checkout script on mount
   const [razorpayReady, setRazorpayReady] = useState(false);
@@ -118,7 +117,6 @@ function CheckoutContent() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
-    setStatusMessage("");
 
     // Validation
     if (!formData.customerName || !formData.customerPhone || !formData.address || !formData.city || !formData.pincode) {
@@ -141,9 +139,7 @@ function CheckoutContent() {
     setIsSubmitting(true);
 
     try {
-      // ── Step 1: Create Order in DB (PENDING_PAYMENT) ──────────────────────
-      setStatusMessage("Creating your order...");
-
+      // ── Step 1: Create Order in DB & Razorpay ──────────────────────────────
       const orderRes = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -173,39 +169,47 @@ function CheckoutContent() {
       if (!orderRes.ok) throw new Error(orderData.error || "Failed to create order");
 
       const { order_id: orderId, order_number: orderNumber } = orderData;
+      let razorpayOrderId = orderData.razorpay_order_id;
+      let amount = orderData.amount;
+      let currency = orderData.currency || "INR";
+      let key_id = orderData.key_id;
 
-      // ── Step 2: Create Razorpay payment order ─────────────────────────────
-      setStatusMessage("Initiating secure payment...");
+      // Fallback: If not returned directly, create via payments endpoint
+      if (!razorpayOrderId) {
+        const payRes = await fetch("/api/payments/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId }),
+        });
+        const payData = await payRes.json();
+        if (!payRes.ok) throw new Error(payData.error || "Failed to initiate payment");
+        razorpayOrderId = payData.razorpay_order_id;
+        amount = payData.amount;
+        currency = payData.currency || "INR";
+        key_id = payData.key_id;
+      }
 
-      const payRes = await fetch("/api/payments/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
-      });
+      const keyToUse =
+        key_id ||
+        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+        "rzp_test_TXBDtvZGtRuyZn";
 
-      const payData = await payRes.json();
-      if (!payRes.ok) throw new Error(payData.error || "Failed to initiate payment");
-
-      const { razorpay_order_id, amount, currency, key_id } = payData;
-
-      // ── Step 3: Open Razorpay Checkout popup ──────────────────────────────
-      setStatusMessage("Opening payment gateway...");
-
+      // ── Step 2: Open Razorpay Checkout popup ──────────────────────────────
       const RazorpayConstructor = (window as unknown as {
         Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (event: string, cb: () => void) => void };
       }).Razorpay;
 
       if (!RazorpayConstructor) {
-        throw new Error("Payment gateway could not be loaded. Please refresh and try again.");
+        throw new Error("Payment gateway is loading. Please try again in a moment.");
       }
 
       // Wrap Razorpay in a promise so we can await the result
       await new Promise<void>((resolve, reject) => {
         const options = {
-          key: key_id,
+          key: keyToUse,
           amount,
-          currency,
-          order_id: razorpay_order_id,
+          currency: currency || "INR",
+          order_id: razorpayOrderId,
           name: "Kushal's Mart",
           description: `Order ${orderNumber}`,
           prefill: {
@@ -246,7 +250,7 @@ function CheckoutContent() {
           },
           modal: {
             ondismiss: () => {
-              reject(new Error("Payment was cancelled. Your order is saved — you can retry."));
+              reject(new Error("Payment was cancelled. Your order is saved — you can retry anytime."));
             },
           },
         };
@@ -264,7 +268,6 @@ function CheckoutContent() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Payment failed. Please try again.";
       setErrorMessage(message);
-      setStatusMessage("");
     } finally {
       setIsSubmitting(false);
     }
@@ -335,13 +338,6 @@ function CheckoutContent() {
               <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 border border-red-200">
                 <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                 <p className="text-xs font-bold text-red-700">{errorMessage}</p>
-              </div>
-            )}
-
-            {statusMessage && !errorMessage && (
-              <div className="flex items-center gap-3 rounded-2xl bg-blue-50 p-4 border border-blue-200">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent shrink-0" />
-                <p className="text-xs font-bold text-blue-700">{statusMessage}</p>
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { createRazorpayOrder } from "@/lib/razorpay";
 
 interface OrderItemRecord {
   id?: string;
@@ -185,8 +186,59 @@ export async function POST(request: Request) {
     // NOTE: Stock decrement and shipment creation are NOT done here.
     // They happen in POST /api/webhooks/razorpay after payment is confirmed.
 
+    // ── Pre-create Razorpay order in the same request for instant checkout ─
+    let razorpayOrderId: string | null = null;
+    const keyId: string =
+      process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID ||
+      "rzp_test_TXBDtvZGtRuyZn";
+
+    try {
+      const rzpOrder = await createRazorpayOrder({
+        amountPaise: subtotal,
+        receipt: orderNumber,
+        notes: {
+          order_id: order.id,
+          order_number: orderNumber,
+          customer_name: customer_name,
+        },
+      });
+
+      razorpayOrderId = rzpOrder.id;
+
+      // Link order immediately
+      await supabaseAdmin
+        .from("Order")
+        .update({ razorpayOrderId: rzpOrder.id })
+        .eq("id", order.id);
+
+      // Audit payments table
+      try {
+        await supabaseAdmin.from("payments").insert([{
+          order_id: order.id,
+          razorpay_order_id: rzpOrder.id,
+          razorpay_payment_id: null,
+          amount: subtotal,
+          currency: "INR",
+          status: "created",
+        }]);
+      } catch {
+        // non-blocking
+      }
+    } catch (rzpErr) {
+      console.warn("[orders/create] Razorpay instant order creation note:", rzpErr);
+    }
+
     return NextResponse.json(
-      { success: true, order_number: orderNumber, order_id: order.id },
+      {
+        success: true,
+        order_number: orderNumber,
+        order_id: order.id,
+        razorpay_order_id: razorpayOrderId,
+        amount: subtotal,
+        currency: "INR",
+        key_id: keyId,
+      },
       { status: 201 }
     );
   } catch (err: unknown) {
