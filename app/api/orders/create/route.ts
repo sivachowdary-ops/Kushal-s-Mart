@@ -26,11 +26,11 @@ function generateOrderNumber() {
 /**
  * POST /api/orders/create
  *
- * Creates an Order with status PENDING_PAYMENT for the Cashfree checkout flow.
+ * Creates an Order with status PENDING_PAYMENT for the Razorpay checkout flow.
  * Online payment only — no COD.
  *
  * Stock is NOT decremented here — that happens in the webhook handler
- * after Cashfree confirms payment. Stock IS validated here to prevent
+ * after Razorpay confirms payment. Stock IS validated here to prevent
  * orders for out-of-stock items.
  *
  * Shiprocket/Delhivery dispatch is NOT triggered here — that also
@@ -183,7 +183,7 @@ export async function POST(request: Request) {
     }
 
     // NOTE: Stock decrement and shipment creation are NOT done here.
-    // They happen in POST /api/webhooks/cashfree after payment is confirmed.
+    // They happen in POST /api/webhooks/razorpay after payment is confirmed.
 
     return NextResponse.json(
       { success: true, order_number: orderNumber, order_id: order.id },

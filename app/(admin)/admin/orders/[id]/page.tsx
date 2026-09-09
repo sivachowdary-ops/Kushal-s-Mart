@@ -399,7 +399,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   </button>
                 ) : (
                   <div className="space-y-3 bg-amber-50/50 rounded-xl p-4 border border-amber-200">
-                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider">Process Cashfree Refund</h3>
+                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider">Process Refund (Razorpay)</h3>
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
                         Refund Amount (₹) — max ₹{(order.total / 100).toFixed(2)}

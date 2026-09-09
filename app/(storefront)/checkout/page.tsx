@@ -93,30 +93,22 @@ function CheckoutContent() {
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
-  // Preload Cashfree SDK on mount
-  const [cashfreeSdk, setCashfreeSdk] = useState<unknown>(null);
+  // Preload Razorpay Checkout script on mount
+  const [razorpayReady, setRazorpayReady] = useState(false);
   useEffect(() => {
-    import("@cashfreepayments/cashfree-js").then((mod) => {
-      const loadFn = mod.load;
-      if (loadFn) {
-        const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
-        loadFn({ mode: cashfreeEnv }).then((sdk: unknown) => setCashfreeSdk(sdk));
+    if (typeof window !== "undefined") {
+      // Check if already loaded
+      if ((window as unknown as { Razorpay?: unknown }).Razorpay) {
+        setRazorpayReady(true);
+        return;
       }
-    }).catch(() => {
-      // Fallback: load from CDN script tag
-      if (typeof window !== "undefined" && !document.querySelector('script[src*="cashfree"]')) {
-        const script = document.createElement("script");
-        script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
-        script.onload = () => {
-          const win = window as unknown as { Cashfree?: (opts: { mode: string }) => unknown };
-          if (win.Cashfree) {
-            const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
-            setCashfreeSdk(win.Cashfree({ mode: cashfreeEnv }));
-          }
-        };
-        document.head.appendChild(script);
-      }
-    });
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => setRazorpayReady(true);
+      script.onerror = () => console.error("[Razorpay] Failed to load checkout script");
+      document.head.appendChild(script);
+    }
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -182,7 +174,7 @@ function CheckoutContent() {
 
       const { order_id: orderId, order_number: orderNumber } = orderData;
 
-      // ── Step 2: Create Cashfree payment order ─────────────────────────────
+      // ── Step 2: Create Razorpay payment order ─────────────────────────────
       setStatusMessage("Initiating secure payment...");
 
       const payRes = await fetch("/api/payments/create-order", {
@@ -194,45 +186,79 @@ function CheckoutContent() {
       const payData = await payRes.json();
       if (!payRes.ok) throw new Error(payData.error || "Failed to initiate payment");
 
-      const { payment_session_id } = payData;
+      const { razorpay_order_id, amount, currency, key_id } = payData;
 
-      // ── Step 3: Open Cashfree checkout ────────────────────────────────────
+      // ── Step 3: Open Razorpay Checkout popup ──────────────────────────────
       setStatusMessage("Opening payment gateway...");
 
-      // Clear cart before redirect (if not buy-now) — we've already created the order
-      if (!isBuyNow) {
-        clearCart();
+      const RazorpayConstructor = (window as unknown as {
+        Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (event: string, cb: () => void) => void };
+      }).Razorpay;
+
+      if (!RazorpayConstructor) {
+        throw new Error("Payment gateway could not be loaded. Please refresh and try again.");
       }
 
-      // Use SDK if loaded, otherwise use CDN global
-      const sdk = cashfreeSdk as { checkout: (opts: Record<string, unknown>) => Promise<unknown> } | null;
+      // Wrap Razorpay in a promise so we can await the result
+      await new Promise<void>((resolve, reject) => {
+        const options = {
+          key: key_id,
+          amount,
+          currency,
+          order_id: razorpay_order_id,
+          name: "Kushal's Mart",
+          description: `Order ${orderNumber}`,
+          prefill: {
+            name: formData.customerName,
+            email: formData.customerEmail || undefined,
+            contact: formData.customerPhone,
+          },
+          theme: {
+            color: "#E60000",
+          },
+          handler: async (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              // Verify payment signature on server
+              const verifyRes = await fetch("/api/payments/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(response),
+              });
 
-      if (sdk && typeof sdk.checkout === "function") {
-        await sdk.checkout({
-          paymentSessionId: payment_session_id,
-          redirectTarget: "_self",
-        });
-      } else {
-        // Fallback: try CDN-loaded Cashfree global
-        const win = window as unknown as {
-          Cashfree?: (opts: { mode: string }) => { checkout: (opts: Record<string, unknown>) => Promise<unknown> };
+              if (!verifyRes.ok) {
+                reject(new Error("Payment verification failed. Please contact support."));
+                return;
+              }
+
+              // Clear cart before redirect (if not buy-now)
+              if (!isBuyNow) {
+                clearCart();
+              }
+
+              resolve();
+            } catch {
+              reject(new Error("Payment verification failed. Please contact support."));
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              reject(new Error("Payment was cancelled. Your order is saved — you can retry."));
+            },
+          },
         };
 
-        if (win.Cashfree) {
-          const cashfreeEnv = process.env.NEXT_PUBLIC_CASHFREE_ENV || "sandbox";
-          const cf = win.Cashfree({ mode: cashfreeEnv });
-          await cf.checkout({
-            paymentSessionId: payment_session_id,
-            redirectTarget: "_self",
-          });
-        } else {
-          // Last resort: redirect to Cashfree payment page manually
-          // The return_url is already configured, so the user will come back after payment
-          throw new Error("Payment gateway could not be loaded. Please refresh and try again.");
-        }
-      }
+        const rzp = new RazorpayConstructor(options);
+        rzp.on("payment.failed", () => {
+          reject(new Error("Payment failed. Please try again with a different payment method."));
+        });
+        rzp.open();
+      });
 
-      // If checkout returns (modal mode), redirect to confirmation
+      // Payment verified — redirect to confirmation page
       router.push(`/order/${orderNumber}`);
 
     } catch (err: unknown) {
@@ -489,7 +515,7 @@ function CheckoutContent() {
             </button>
 
             <p className="text-[10px] font-semibold text-gray-400 text-center">
-              Powered by Cashfree Payments · UPI, Cards, Net Banking accepted
+              Powered by Razorpay · UPI, Cards, Net Banking accepted
             </p>
           </div>
 

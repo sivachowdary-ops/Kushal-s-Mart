@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { verifyCashfreeWebhookSignature } from "@/lib/cashfree";
+import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
 import { createDelhiveryShipment } from "@/lib/delhivery";
 
 /**
- * POST /api/webhooks/cashfree
+ * POST /api/webhooks/razorpay
  *
  * THE SINGLE SOURCE OF TRUTH for payment confirmation.
  * Only this handler marks orders as PAID, decrements stock, and triggers shipment.
  *
  * Critical implementation notes:
  * 1. Raw body must be read as text BEFORE any JSON.parse for signature verification.
- * 2. Signature verification uses constant-time comparison (in lib/cashfree.ts).
+ * 2. Signature verification uses HMAC-SHA256 with constant-time comparison.
  * 3. Idempotent — duplicate webhook deliveries are no-ops.
  * 4. Stock decrement is atomic via Postgres RPC function.
  * 5. Delhivery shipment creation happens AFTER the payment transaction commits —
@@ -22,76 +22,73 @@ export async function POST(request: Request) {
     // ── 1. Read raw body as text — BEFORE any JSON.parse ─────────────────────
     const rawBody = await request.text();
 
-    // ── 2. Read signature headers ───────────────────────────────────────────
-    const timestamp = request.headers.get("x-webhook-timestamp") || "";
-    const signature = request.headers.get("x-webhook-signature") || "";
+    // ── 2. Read signature header ────────────────────────────────────────────
+    const signature = request.headers.get("x-razorpay-signature") || "";
 
     // ── 3. Verify webhook signature ─────────────────────────────────────────
-    if (!verifyCashfreeWebhookSignature(rawBody, timestamp, signature)) {
-      console.warn("[Cashfree Webhook] Invalid signature — rejecting");
+    if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
+      console.warn("[Razorpay Webhook] Invalid signature — rejecting");
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 
     // ── 4. Parse verified body ──────────────────────────────────────────────
     const event = JSON.parse(rawBody);
+    const eventType: string = event.event || "unknown";
 
-    // Extract fields — Cashfree webhook structure can vary slightly by event type
-    const paymentData = event.data?.payment || event.data || {};
-    const orderData = event.data?.order || event.data || {};
-    const cashfreeOrderId: string = orderData.order_id || paymentData.order_id || "";
-    const cfPaymentId: string = paymentData.cf_payment_id || "";
-    const paymentStatus: string = (
-      paymentData.payment_status || orderData.order_status || ""
-    ).toUpperCase();
-    const eventType: string = event.type || event.event_type || "unknown";
+    console.log(`[Razorpay Webhook] Event: ${eventType}`);
 
-    console.log(
-      `[Cashfree Webhook] Event: ${eventType}, OrderID: ${cashfreeOrderId}, Status: ${paymentStatus}`
-    );
+    // ── 5. Handle payment events ────────────────────────────────────────────
+    if (eventType === "order.paid" || eventType === "payment.captured") {
+      const paymentEntity = event.payload?.payment?.entity || {};
+      const orderEntity = event.payload?.order?.entity || {};
 
-    if (!cashfreeOrderId) {
-      console.warn("[Cashfree Webhook] No order_id in payload — skipping");
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
+      const razorpayOrderId: string = paymentEntity.order_id || orderEntity.id || "";
+      const razorpayPaymentId: string = paymentEntity.id || "";
 
-    // ── 5. Look up our payments row ─────────────────────────────────────────
-    const { data: paymentRow, error: payLookupErr } = await supabaseAdmin
-      .from("payments")
-      .select("*")
-      .eq("cashfree_order_id", cashfreeOrderId)
-      .maybeSingle();
+      if (!razorpayOrderId) {
+        console.warn("[Razorpay Webhook] No order_id in payload — skipping");
+        return NextResponse.json({ success: true }, { status: 200 });
+      }
 
-    if (payLookupErr || !paymentRow) {
-      console.warn(
-        "[Cashfree Webhook] No payments row found for cashfree_order_id:",
-        cashfreeOrderId
-      );
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
+      // ── 5a. Look up our payments row ────────────────────────────────────
+      const { data: paymentRow, error: payLookupErr } = await supabaseAdmin
+        .from("payments")
+        .select("*")
+        .eq("razorpay_order_id", razorpayOrderId)
+        .maybeSingle();
 
-    // ── 6. Idempotency check ────────────────────────────────────────────────
-    if (paymentRow.status === "paid" && paymentRow.cf_payment_id === cfPaymentId) {
-      console.log("[Cashfree Webhook] Duplicate — already processed, no-op");
-      return NextResponse.json({ success: true }, { status: 200 });
-    }
+      if (payLookupErr || !paymentRow) {
+        console.warn(
+          "[Razorpay Webhook] No payments row found for razorpay_order_id:",
+          razorpayOrderId
+        );
+        return NextResponse.json({ success: true }, { status: 200 });
+      }
 
-    const internalOrderId: string = paymentRow.order_id;
-    const now = new Date().toISOString();
+      // ── 5b. Idempotency check ───────────────────────────────────────────
+      if (
+        paymentRow.status === "paid" &&
+        paymentRow.razorpay_payment_id === razorpayPaymentId
+      ) {
+        console.log("[Razorpay Webhook] Duplicate — already processed, no-op");
+        return NextResponse.json({ success: true }, { status: 200 });
+      }
 
-    // ── 7. Handle successful payment ────────────────────────────────────────
-    if (paymentStatus === "SUCCESS" || paymentStatus === "PAID") {
-      // 7a. Update payments row
+      const internalOrderId: string = paymentRow.order_id;
+      const now = new Date().toISOString();
+
+      // ── 5c. Update payments row ─────────────────────────────────────────
       await supabaseAdmin
         .from("payments")
         .update({
           status: "paid",
-          cf_payment_id: cfPaymentId,
+          razorpay_payment_id: razorpayPaymentId,
           raw_webhook_payload: event,
           updated_at: now,
         })
         .eq("id", paymentRow.id);
 
-      // 7b. Update Order status
+      // ── 5d. Update Order status ─────────────────────────────────────────
       await supabaseAdmin
         .from("Order")
         .update({
@@ -101,7 +98,7 @@ export async function POST(request: Request) {
         })
         .eq("id", internalOrderId);
 
-      // 7c. Atomic stock decrement for each OrderItem
+      // ── 5e. Atomic stock decrement for each OrderItem ───────────────────
       const { data: orderItems } = await supabaseAdmin
         .from("OrderItem")
         .select("variantId, quantity, productName")
@@ -120,13 +117,13 @@ export async function POST(request: Request) {
 
             if (rpcErr) {
               console.error(
-                `[Cashfree Webhook] RPC decrement_stock failed for ${item.variantId}:`,
+                `[Razorpay Webhook] RPC decrement_stock failed for ${item.variantId}:`,
                 rpcErr
               );
             } else if (decremented === false) {
               console.warn(
-                `[Cashfree Webhook] Insufficient stock for variant ${item.variantId} ` +
-                `(${item.productName}) — order ${cashfreeOrderId} flagged for admin review`
+                `[Razorpay Webhook] Insufficient stock for variant ${item.variantId} ` +
+                `(${item.productName}) — order ${razorpayOrderId} flagged for admin review`
               );
             }
 
@@ -141,14 +138,14 @@ export async function POST(request: Request) {
             }]);
           } catch (stockErr) {
             console.error(
-              `[Cashfree Webhook] Stock operation error for ${item.variantId}:`,
+              `[Razorpay Webhook] Stock operation error for ${item.variantId}:`,
               stockErr
             );
           }
         }
       }
 
-      // 7d. AFTER payment confirmed — trigger Delhivery shipment (separate from DB ops)
+      // ── 5f. AFTER payment confirmed — trigger Delhivery shipment ────────
       try {
         const { data: fullOrder } = await supabaseAdmin
           .from("Order")
@@ -200,53 +197,65 @@ export async function POST(request: Request) {
               .eq("id", internalOrderId);
 
             console.log(
-              `[Cashfree Webhook] Delhivery shipment created: AWB ${result.waybill}`
+              `[Razorpay Webhook] Delhivery shipment created: AWB ${result.waybill}`
             );
           }
         }
       } catch (shipErr) {
         // Delhivery failure must NEVER roll back the payment
         console.error(
-          "[Cashfree Webhook] Delhivery shipment creation failed — admin must dispatch manually:",
+          "[Razorpay Webhook] Delhivery shipment creation failed — admin must dispatch manually:",
           shipErr
         );
       }
 
       console.log(
-        `[Cashfree Webhook] Payment confirmed for order ${cashfreeOrderId}`
+        `[Razorpay Webhook] Payment confirmed for order ${razorpayOrderId}`
       );
     }
 
-    // ── 8. Handle failed payment ────────────────────────────────────────────
-    else if (
-      paymentStatus === "FAILED" ||
-      paymentStatus === "USER_DROPPED" ||
-      paymentStatus === "CANCELLED" ||
-      paymentStatus === "VOID"
-    ) {
-      await supabaseAdmin
-        .from("payments")
-        .update({
-          status: "failed",
-          failure_reason: paymentData.payment_message || paymentStatus,
-          raw_webhook_payload: event,
-          updated_at: now,
-        })
-        .eq("id", paymentRow.id);
+    // ── 6. Handle failed payment ────────────────────────────────────────────
+    else if (eventType === "payment.failed") {
+      const paymentEntity = event.payload?.payment?.entity || {};
+      const razorpayOrderId: string = paymentEntity.order_id || "";
+      const failureReason: string =
+        paymentEntity.error_description ||
+        paymentEntity.error_reason ||
+        "Payment failed";
 
-      // Leave Order as PENDING_PAYMENT — customer can retry
-      console.log(
-        `[Cashfree Webhook] Payment failed for order ${cashfreeOrderId}: ${paymentStatus}`
-      );
+      if (razorpayOrderId) {
+        const { data: paymentRow } = await supabaseAdmin
+          .from("payments")
+          .select("id")
+          .eq("razorpay_order_id", razorpayOrderId)
+          .maybeSingle();
+
+        if (paymentRow) {
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              status: "failed",
+              failure_reason: failureReason,
+              raw_webhook_payload: event,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", paymentRow.id);
+        }
+
+        // Leave Order as PENDING_PAYMENT — customer can retry
+        console.log(
+          `[Razorpay Webhook] Payment failed for order ${razorpayOrderId}: ${failureReason}`
+        );
+      }
     }
 
-    // ── 9. Always return 200 ────────────────────────────────────────────────
+    // ── 7. Always return 200 ────────────────────────────────────────────────
     return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Webhook processing error";
-    console.error("[Cashfree Webhook] Unhandled error:", msg);
-    // Still return 200 to prevent Cashfree from retrying due to our bugs
+    console.error("[Razorpay Webhook] Unhandled error:", msg);
+    // Still return 200 to prevent Razorpay from retrying due to our bugs
     return NextResponse.json({ success: true }, { status: 200 });
   }
 }

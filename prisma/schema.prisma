@@ -100,7 +100,7 @@ model Order {
   shiprocketAwb     String?     // also used for Delhivery waybill
   courierName       String?
   items             OrderItem[]
-  payments          CashfreePayment[]
+  payments          RazorpayPayment[]
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -127,18 +127,17 @@ model OrderItem {
   @@index([orderId])
 }
 
-// Cashfree payment audit trail — source of truth for all payment events.
-// Maps to the lowercase "payments" table (old Razorpay "Payment" was renamed to "PaymentLegacy").
-model CashfreePayment {
+// Razorpay payment audit trail — source of truth for all payment events.
+// Maps to the lowercase "payments" table.
+model RazorpayPayment {
   id                String    @id @default(uuid()) @db.Uuid
   orderId           String    @map("order_id")
   order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  cashfreeOrderId   String    @unique @map("cashfree_order_id") // our orderNumber sent to Cashfree
-  cfPaymentId       String?   @unique @map("cf_payment_id")     // set once payment completes
-  paymentSessionId  String?   @map("payment_session_id")
+  razorpayOrderId   String    @unique @map("razorpay_order_id") // order_...
+  razorpayPaymentId String?   @unique @map("razorpay_payment_id") // pay_...
   amount            Int       // paise — must match Order.total
   currency          String    @default("INR")
-  status            String    @default("created") // created | active | paid | failed | refunded | partially_refunded | expired
+  status            String    @default("created") // created | active | paid | failed | refunded | partially_refunded
   failureReason     String?   @map("failure_reason")
   rawWebhookPayload Json?     @map("raw_webhook_payload")
   createdAt         DateTime  @default(now()) @map("created_at")

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyAdmin } from "@/lib/admin-auth";
-import { createCashfreeRefund } from "@/lib/cashfree";
+import { createRazorpayRefund } from "@/lib/razorpay";
 
 /**
  * POST /api/admin/orders/[id]/refund
  *
- * Admin-only endpoint for processing Cashfree refunds.
+ * Admin-only endpoint for processing Razorpay refunds.
  * Supports both full and partial refunds.
  * Does NOT auto-cancel the order or auto-restore stock — admin decides.
  */
@@ -55,29 +55,23 @@ export async function POST(
       );
     }
 
-    // Get orderNumber (used as cashfreeOrderId)
-    const { data: order } = await supabaseAdmin
-      .from("Order")
-      .select("orderNumber")
-      .eq("id", id)
-      .single();
-
-    if (!order) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    // Razorpay refunds require the payment_id (not order_id)
+    const razorpayPaymentId = paymentRow.razorpay_payment_id;
+    if (!razorpayPaymentId) {
+      return NextResponse.json(
+        { error: "No Razorpay payment ID found — cannot process refund" },
+        { status: 400 }
+      );
     }
 
-    // Generate unique refund ID
-    const refundId = `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-
-    // Convert paise to rupees for Cashfree API
-    const amountRupees = parseFloat((amount / 100).toFixed(2));
-
-    // Call Cashfree refund API
-    const refundResult = await createCashfreeRefund({
-      cashfreeOrderId: order.orderNumber,
-      refundAmount: amountRupees,
-      refundId,
-      refundNote: note || "Admin-initiated refund",
+    // Call Razorpay refund API — amount in paise (no conversion needed!)
+    const refundResult = await createRazorpayRefund({
+      paymentId: razorpayPaymentId,
+      amountPaise: amount,
+      notes: {
+        reason: note || "Admin-initiated refund",
+        order_id: id,
+      },
     });
 
     // Update payment status
@@ -92,19 +86,18 @@ export async function POST(
       .eq("id", paymentRow.id);
 
     console.log(
-      `[Cashfree Refund] ${newStatus} for order ${order.orderNumber}: ₹${amountRupees} (refundId: ${refundId})`
+      `[Razorpay Refund] ${newStatus} for order ${id}: ₹${(amount / 100).toFixed(2)}`
     );
 
     return NextResponse.json({
       success: true,
-      refundId,
       status: newStatus,
       refundResult,
     });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Refund processing failed";
-    console.error("[Cashfree Refund] Error:", msg);
+    console.error("[Razorpay Refund] Error:", msg);
 
     // Check for auth errors
     if (msg.includes("Unauthorized") || msg.includes("not authorized")) {

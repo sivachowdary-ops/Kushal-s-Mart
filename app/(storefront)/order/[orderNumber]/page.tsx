@@ -50,7 +50,7 @@ interface FullOrder {
 /**
  * Order Confirmation Page — Client Component with Polling
  *
- * After Cashfree payment redirect, this page polls /api/orders/[orderNumber]/status
+ * After Razorpay payment, this page polls /api/orders/[orderNumber]/status
  * every 3 seconds until the webhook confirms payment (max ~60 seconds).
  *
  * States:
