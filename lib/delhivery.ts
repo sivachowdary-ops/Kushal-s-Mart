@@ -32,6 +32,9 @@ export interface DelhiveryShipmentRequest {
   totalAmount: number; // paise
   paymentMode?: string; // Always prepaid for online orders
   weightGrams?: number; // Optional override
+  lengthCm?: number; // Optional package dimensions (default: 20cm)
+  widthCm?: number; // Optional package dimensions (default: 20cm)
+  heightCm?: number; // Optional package dimensions (default: 20cm)
 }
 
 export interface DelhiveryShipmentResponse {
@@ -183,10 +186,10 @@ export async function createDelhiveryShipment(
           cod_amount: 0,
           quantity: totalQty,
           weight: weightKg,
-          // Approved default package dimensions: 20cm x 20cm x 20cm
-          length: 20,
-          breadth: 20,
-          height: 20,
+          // Standard package dimensions: defaults to 20cm x 20cm x 20cm or custom product specs
+          length: data.lengthCm || 20,
+          breadth: data.widthCm || 20,
+          height: data.heightCm || 20,
         },
       ],
       pickup_location: {

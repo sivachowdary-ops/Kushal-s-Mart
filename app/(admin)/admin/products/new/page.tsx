@@ -24,14 +24,25 @@ export default function NewProductPage() {
   const [costPrice, setCostPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
   
-  // Dimensions & Weight
-  const [weight, setWeight] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
+  // Dimensions & Weight — standard approved defaults (500g, 20x20x20cm), editable by admin
+  const [weight, setWeight] = useState("500");
+  const [length, setLength] = useState("20");
+  const [width, setWidth] = useState("20");
+  const [height, setHeight] = useState("20");
   
   // Media
   const [images, setImages] = useState<string[]>([]);
+
+  // Automatically prune variant images whenever an image is removed/reordered from product images
+  const handleImagesChange = (newImages: string[]) => {
+    setImages(newImages);
+    setVariants((prev) =>
+      prev.map((v) => ({
+        ...v,
+        images: (v.images || []).filter((url) => newImages.includes(url)),
+      }))
+    );
+  };
   
   // Features
   const [badgeType, setBadgeType] = useState("");
@@ -66,10 +77,10 @@ export default function NewProductPage() {
         mrp: Math.round(parseFloat(mrp || "0") * 100),
         selling_price: Math.round(parseFloat(sellingPrice || "0") * 100),
         cost_price: Math.round(parseFloat(costPrice || "0") * 100),
-        weight_grams: weight ? parseInt(weight) : null,
-        length_cm: length ? parseInt(length) : null,
-        width_cm: width ? parseInt(width) : null,
-        height_cm: height ? parseInt(height) : null,
+        weight_grams: weight ? parseInt(weight) : 500,
+        length_cm: length ? parseInt(length) : 20,
+        width_cm: width ? parseInt(width) : 20,
+        height_cm: height ? parseInt(height) : 20,
         images: images,
         specifications: specifications.filter(s => s.key).reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {}),
         whats_in_the_box: whatsInTheBox.filter(Boolean),
@@ -78,7 +89,12 @@ export default function NewProductPage() {
         is_active: isActive,
       };
 
-      const result = await addProduct(productData, variants as any);
+      const sanitizedVariants = variants.map((v) => ({
+        ...v,
+        images: (v.images || []).filter((url) => images.includes(url)),
+      }));
+
+      const result = await addProduct(productData, sanitizedVariants as any);
       if (result) {
         setIsSaved(true);
         setTimeout(() => {
@@ -286,7 +302,7 @@ export default function NewProductPage() {
                             <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
                             <span>Select photos for <b>{v.name || "this variant"}</b>:</span>
                             <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                              {(v.images?.length || 0)} selected
+                              {((v.images || []).filter((url) => images.includes(url)).length)} selected
                             </span>
                           </label>
                           <div className="flex items-center gap-2 text-[10px]">
@@ -320,7 +336,7 @@ export default function NewProductPage() {
                                 key={imgIdx}
                                 type="button"
                                 onClick={() => {
-                                  const currentImgs = v.images || [];
+                                  const currentImgs = (v.images || []).filter((url) => images.includes(url));
                                   const nextImgs = isSelected
                                     ? currentImgs.filter((url) => url !== imgUrl)
                                     : [...currentImgs, imgUrl];
@@ -386,7 +402,7 @@ export default function NewProductPage() {
               <h2 className="text-xl font-semibold mb-6">Product Images</h2>
               <ImageUploader
                 value={images}
-                onChange={setImages}
+                onChange={handleImagesChange}
                 maxImages={20}
                 folder="products"
               />

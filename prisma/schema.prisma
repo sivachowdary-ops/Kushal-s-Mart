@@ -34,10 +34,10 @@ model Product {
   mrp             Int              // paise
   sellingPrice    Int              // paise
   costPrice       Int              @default(0) // paise (Purchase Price / Cost of Goods Sold)
-  weightGrams     Int              @default(500) // Shiprocket package weight
-  lengthCm        Int              @default(15)  // Shiprocket package dimensions
-  widthCm         Int              @default(10)
-  heightCm        Int              @default(10)
+  weightGrams     Int              @default(500) // Package weight in grams
+  lengthCm        Int              @default(20)  // Package dimensions in cm
+  widthCm         Int              @default(20)
+  heightCm        Int              @default(20)
   images          String[]         // array of Supabase Storage URLs
   metaTitle       String?
   metaDescription String?

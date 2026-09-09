@@ -49,7 +49,13 @@ export function normalizeVariant(v: Record<string, unknown>) {
   };
 }
 
-export function toVariantDB(v: Record<string, unknown>, productId?: string) {
+export function toVariantDB(v: Record<string, unknown>, productId?: string, productImages?: string[]) {
+  const rawImages = Array.isArray(v.images) ? (v.images as string[]) : [];
+  // If parent product images are provided, strictly filter to retain only valid product images
+  const sanitizedImages = productImages && productImages.length > 0
+    ? rawImages.filter((url) => productImages.includes(url))
+    : rawImages;
+
   const row: Record<string, unknown> = {
     name: v.name || "Default",
     sku: v.sku || `SKU-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`.toUpperCase(),
@@ -57,7 +63,7 @@ export function toVariantDB(v: Record<string, unknown>, productId?: string) {
     lowStockThreshold: typeof v.low_stock_threshold === "number" ? v.low_stock_threshold : 3,
     sellingPriceOverride: v.selling_price_override != null && v.selling_price_override !== "" ? Number(v.selling_price_override) : null,
     mrpOverride: v.mrp_override != null && v.mrp_override !== "" ? Number(v.mrp_override) : null,
-    images: Array.isArray(v.images) ? v.images : [],
+    images: sanitizedImages,
     updatedAt: new Date().toISOString(),
   };
   if (v.id) {
@@ -85,7 +91,10 @@ export function normalizeProduct(p: Record<string, unknown>) {
     cost_price: (p.costPrice as number) || 0,
     images: (p.images as string[]) || [],
     is_active: p.isActive as boolean,
-    weight_grams: (p.weightGrams as number) ?? null,
+    weight_grams: (p.weightGrams as number) ?? 500,
+    length_cm: (p.lengthCm as number) ?? 20,
+    width_cm: (p.widthCm as number) ?? 20,
+    height_cm: (p.heightCm as number) ?? 20,
     specifications: (p.specifications as Record<string, string>) || {},
     whats_in_the_box: (p.whatsInTheBox as string[]) || [],
     badge_type: (p.badgeType as string) || null,
@@ -112,11 +121,12 @@ export function toProductDB(body: Record<string, unknown>) {
     costPrice: (body.cost_price as number) || 0,
     images: body.images || [],
     isActive: body.is_active ?? true,
+    weightGrams: body.weight_grams ? Number(body.weight_grams) : 500,
+    lengthCm: body.length_cm ? Number(body.length_cm) : 20,
+    widthCm: body.width_cm ? Number(body.width_cm) : 20,
+    heightCm: body.height_cm ? Number(body.height_cm) : 20,
     updatedAt: new Date().toISOString(),
   };
-  if (body.weight_grams !== undefined) {
-    row.weightGrams = body.weight_grams ? Number(body.weight_grams) : null;
-  }
   if (body.specifications !== undefined) {
     row.specifications = body.specifications;
   }

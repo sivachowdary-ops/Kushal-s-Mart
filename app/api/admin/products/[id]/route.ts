@@ -73,9 +73,11 @@ export async function PUT(
         }
       }
 
+      const productImages = (dbRow.images as string[]) || (productBody.images as string[]) || [];
+
       // 3. In-place update or insert incoming variants
       for (const v of variants) {
-        const variantRow = toVariantDB(v, id);
+        const variantRow = toVariantDB(v, id, productImages);
         const variantId = (v.id as string) || (variantRow.id as string);
 
         if (v.id && existingIds.has(v.id as string)) {

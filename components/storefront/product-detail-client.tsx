@@ -73,11 +73,13 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   const discountPercent =
     activeMrp > activePrice ? Math.round(((activeMrp - activePrice) / activeMrp) * 100) : 0;
 
-  // Show variant-specific images if available, otherwise fall back to product images
+  // Show variant-specific images if valid and present in product images, otherwise fall back to product images
+  const prodImages = product.images || [];
+  const validVariantImages = (currentVariant?.images || []).filter((img) =>
+    prodImages.includes(img)
+  );
   const activeImages =
-    (currentVariant?.images && currentVariant.images.length > 0)
-      ? currentVariant.images
-      : (product.images || []);
+    validVariantImages.length > 0 ? validVariantImages : prodImages;
 
   // Carousel controls & touch swipe
   const [touchStartX, setTouchStartX] = useState<number | null>(null);

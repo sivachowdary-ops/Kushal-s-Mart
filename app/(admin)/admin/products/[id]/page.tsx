@@ -26,14 +26,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [costPrice, setCostPrice] = useState("");
   const [isActive, setIsActive] = useState(true);
   
-  // Dimensions & Weight
-  const [weight, setWeight] = useState("");
-  const [length, setLength] = useState("");
-  const [width, setWidth] = useState("");
-  const [height, setHeight] = useState("");
+  // Dimensions & Weight — standard approved defaults (500g, 20x20x20cm)
+  const [weight, setWeight] = useState("500");
+  const [length, setLength] = useState("20");
+  const [width, setWidth] = useState("20");
+  const [height, setHeight] = useState("20");
   
   // Media
   const [images, setImages] = useState<string[]>([]);
+
+  // Automatically prune variant images whenever an image is removed/reordered from product images
+  const handleImagesChange = (newImages: string[]) => {
+    setImages(newImages);
+    setVariants((prev) =>
+      prev.map((v) => ({
+        ...v,
+        images: (v.images || []).filter((url) => newImages.includes(url)),
+      }))
+    );
+  };
   
   // Features
   const [badgeType, setBadgeType] = useState("");
@@ -60,11 +71,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setSellingPrice(product.selling_price ? (product.selling_price / 100).toString() : "");
         setCostPrice(product.cost_price ? (product.cost_price / 100).toString() : "");
         setIsActive(product.is_active ?? true);
-        setWeight(product.weight_grams?.toString() || "");
-        setLength(product.length_cm?.toString() || "");
-        setWidth(product.width_cm?.toString() || "");
-        setHeight(product.height_cm?.toString() || "");
-        setImages(product.images || []);
+        setWeight(product.weight_grams ? product.weight_grams.toString() : "500");
+        setLength(product.length_cm ? product.length_cm.toString() : "20");
+        setWidth(product.width_cm ? product.width_cm.toString() : "20");
+        setHeight(product.height_cm ? product.height_cm.toString() : "20");
+        const prodImages = product.images || [];
+        setImages(prodImages);
         setBadgeType(product.badge_type || "");
         setDiscountPercent(product.discount_percent?.toString() || "");
 
@@ -78,7 +90,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               low_stock_threshold: v.low_stock_threshold ?? 3,
               selling_price_override: v.selling_price_override,
               mrp_override: v.mrp_override,
-              images: v.images || [],
+              // Filter out any stale/deleted images that are no longer in product.images
+              images: (v.images || []).filter((url) => prodImages.includes(url)),
             }))
           );
         } else {
@@ -110,17 +123,22 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         mrp: Math.round(parseFloat(mrp || "0") * 100),
         selling_price: Math.round(parseFloat(sellingPrice || "0") * 100),
         cost_price: Math.round(parseFloat(costPrice || "0") * 100),
-        weight_grams: weight ? parseInt(weight) : null,
-        length_cm: length ? parseInt(length) : null,
-        width_cm: width ? parseInt(width) : null,
-        height_cm: height ? parseInt(height) : null,
+        weight_grams: weight ? parseInt(weight) : 500,
+        length_cm: length ? parseInt(length) : 20,
+        width_cm: width ? parseInt(width) : 20,
+        height_cm: height ? parseInt(height) : 20,
         images: images,
         badge_type: badgeType || null,
         discount_percent: discountPercent ? parseInt(discountPercent) : null,
         is_active: isActive,
       };
 
-      await updateProduct(id, productData, variants);
+      const sanitizedVariants = variants.map((v) => ({
+        ...v,
+        images: (v.images || []).filter((url) => images.includes(url)),
+      }));
+
+      await updateProduct(id, productData, sanitizedVariants);
       setIsSaved(true);
       setTimeout(() => {
         router.push("/admin/products");
@@ -339,7 +357,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                             <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
                             <span>Select photos for <b>{v.name || "this variant"}</b>:</span>
                             <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                              {(v.images?.length || 0)} selected
+                              {((v.images || []).filter((url) => images.includes(url)).length)} selected
                             </span>
                           </label>
                           <div className="flex items-center gap-2 text-[10px]">
@@ -373,7 +391,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                 key={imgIdx}
                                 type="button"
                                 onClick={() => {
-                                  const currentImgs = v.images || [];
+                                  const currentImgs = (v.images || []).filter((url) => images.includes(url));
                                   const nextImgs = isSelected
                                     ? currentImgs.filter((url) => url !== imgUrl)
                                     : [...currentImgs, imgUrl];
@@ -439,7 +457,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               <h2 className="text-xl font-semibold mb-6">Product Images</h2>
               <ImageUploader
                 value={images}
-                onChange={setImages}
+                onChange={handleImagesChange}
                 maxImages={20}
                 folder="products"
               />

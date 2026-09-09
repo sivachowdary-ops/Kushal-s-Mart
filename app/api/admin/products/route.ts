@@ -41,8 +41,9 @@ export async function POST(request: Request) {
     if (productError) return NextResponse.json({ error: productError.message }, { status: 500 });
 
     if (variants && variants.length > 0) {
+      const productImages = (dbRow.images as string[]) || [];
       const variantsData = variants.map((v: Record<string, unknown>) => ({
-        ...toVariantDB(v, product.id),
+        ...toVariantDB(v, product.id, productImages),
         createdAt: new Date().toISOString(),
       }));
 
