@@ -91,6 +91,7 @@ export function Header() {
                 <Link
                   key={cat.id}
                   href={`/category/${cat.slug}`}
+                  prefetch={true}
                   className="hover:text-red-600 transition-colors"
                 >
                   {cat.name}
@@ -181,6 +182,7 @@ export function Header() {
               <Link
                 key={cat.id}
                 href={`/category/${cat.slug}`}
+                prefetch={true}
                 onClick={() => setMobileMenuOpen(false)}
                 className="hover:text-red-600"
               >

@@ -53,6 +53,7 @@ export default async function CategoriesPage() {
               <Link
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
+                prefetch={true}
                 className="group flex flex-col items-center gap-2 sm:gap-4 rounded-2xl sm:rounded-3xl bg-white border border-gray-200/80 p-4 sm:p-8 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-red-200"
               >
                 {/* Category Icon / Image */}

@@ -23,9 +23,11 @@ export interface StorefrontProduct {
   id: string;
   name: string;
   slug: string;
+  description?: string;
   brand?: string | null;
   mrp: number;
   sellingPrice: number;
+  selling_price?: number;
   images: string[];
   imageUrl?: string;
   categoryId: string;
@@ -37,9 +39,11 @@ export interface StorefrontProduct {
   variants: StorefrontVariant[];
 }
 
-// In-memory persistent cache
+// In-memory persistent cache with 30s TTL
 let cachedCategories: StorefrontCategory[] = (fallbackData.categories || []) as StorefrontCategory[];
 let cachedRawProducts: any[] = fallbackData.products || [];
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 /**
  * Normalizes a raw Product row from Supabase (or fallback JSON)
@@ -52,6 +56,9 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     sku: v.sku || "",
     stock: typeof v.stock === "number" ? v.stock : 0,
     sellingPriceOverride: v.sellingPriceOverride ?? null,
+    selling_price_override: v.sellingPriceOverride ?? null,
+    mrpOverride: v.mrpOverride ?? null,
+    mrp_override: v.mrpOverride ?? null,
     images: Array.isArray(v.images) ? v.images : [],
   }));
 
@@ -102,9 +109,11 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     id: p.id,
     name: p.name,
     slug: p.slug,
+    description: p.description || "",
     brand: p.brand || null,
     mrp: p.mrp,
     sellingPrice: p.sellingPrice,
+    selling_price: p.sellingPrice,
     images: imagesList,
     imageUrl: imagesList[0] || undefined,
     categoryId: p.categoryId || "cat-rc-cars",
@@ -121,7 +130,22 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
  * Fetches homepage products and categories with built-in retry and in-memory fallback.
  * Prevents the homepage from EVER displaying "Coming Soon" due to cold starts or network glitches.
  */
-export async function getStorefrontData() {
+export async function getStorefrontData(forceRefresh = false) {
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    cachedCategories.length > 0 &&
+    cachedRawProducts.length > 0 &&
+    now - lastFetchTime < CACHE_TTL_MS
+  ) {
+    const categorySlugMap = new Map<string, string>();
+    cachedCategories.forEach((c) => categorySlugMap.set(c.id, c.slug));
+    return {
+      categories: cachedCategories,
+      allProducts: cachedRawProducts.map((p) => normalizeStoreProduct(p, categorySlugMap)),
+    };
+  }
+
   try {
     const [catRes, prodRes] = await Promise.all([
       supabaseAdmin
@@ -131,21 +155,21 @@ export async function getStorefrontData() {
       supabaseAdmin
         .from("Product")
         .select(`
-          id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive,
+          id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
           Category ( id, name, slug ),
-          ProductVariant ( id, name, sku, stock, sellingPriceOverride, images )
+          ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
         `)
         .eq("isActive", true)
         .order("createdAt", { ascending: false })
-        .limit(40),
+        .limit(60),
     ]);
 
     let categories = catRes.data;
     let rawProducts = prodRes.data;
 
-    // If query failed or returned empty data (transient DB hiccup), retry once after 300ms
+    // If query failed or returned empty data (transient DB hiccup), retry once after 200ms
     if ((!categories || categories.length === 0) || (!rawProducts || rawProducts.length === 0)) {
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 200));
       const [retryCat, retryProd] = await Promise.all([
         supabaseAdmin
           .from("Category")
@@ -154,13 +178,13 @@ export async function getStorefrontData() {
         supabaseAdmin
           .from("Product")
           .select(`
-            id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive,
+            id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
             Category ( id, name, slug ),
-            ProductVariant ( id, name, sku, stock, sellingPriceOverride, images )
+            ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
           `)
           .eq("isActive", true)
           .order("createdAt", { ascending: false })
-          .limit(40),
+          .limit(60),
       ]);
       if (retryCat.data && retryCat.data.length > 0) categories = retryCat.data;
       if (retryProd.data && retryProd.data.length > 0) rawProducts = retryProd.data;
@@ -169,11 +193,13 @@ export async function getStorefrontData() {
     // If categories succeeded, update cache
     if (categories && categories.length > 0) {
       cachedCategories = categories as StorefrontCategory[];
+      lastFetchTime = Date.now();
     }
 
     // If products succeeded, update cache
     if (rawProducts && rawProducts.length > 0) {
       cachedRawProducts = rawProducts;
+      lastFetchTime = Date.now();
     }
   } catch (error) {
     console.warn("[storefront-data] Supabase query error, serving from memory cache:", error);
@@ -192,4 +218,36 @@ export async function getStorefrontData() {
     categories: activeCategories,
     allProducts,
   };
+}
+
+/**
+ * Fast lookup for a single product by slug with memory-cache acceleration.
+ * Resolves in < 1ms if catalog is cached.
+ */
+export async function getProductBySlug(slug: string): Promise<StorefrontProduct | null> {
+  const { allProducts } = await getStorefrontData();
+  const found = allProducts.find((p) => p.slug === slug);
+  if (found) return found;
+
+  // Direct Supabase query fallback for any product outside top list
+  try {
+    const { data } = await supabaseAdmin
+      .from("Product")
+      .select(`
+        id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
+        Category ( id, name, slug ),
+        ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
+      `)
+      .eq("slug", slug)
+      .eq("isActive", true)
+      .maybeSingle();
+
+    if (data) {
+      return normalizeStoreProduct(data);
+    }
+  } catch (err) {
+    console.warn("[getProductBySlug] Direct query error:", err);
+  }
+
+  return null;
 }

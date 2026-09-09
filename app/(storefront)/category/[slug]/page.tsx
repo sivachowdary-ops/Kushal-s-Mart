@@ -16,21 +16,19 @@ export default async function CategoryDetailPage({
 }) {
   const { slug } = await params;
 
-  // Fetch the category with resilient fallback
-  let category: { id: string; name: string; slug: string; description?: string | null } | null = null;
-  const { data: catData } = await supabaseAdmin
-    .from("Category")
-    .select("id, name, slug, description")
-    .eq("slug", slug)
-    .single();
+  // Fetch category and catalog with memory cache acceleration (< 1ms)
+  const { categories, allProducts } = await getStorefrontData();
+  let category = categories.find((c) => c.slug === slug) || null;
 
-  if (catData) {
-    category = catData;
-  } else {
-    const storeData = await getStorefrontData();
-    const fallbackCat = storeData.categories.find((c) => c.slug === slug);
-    if (fallbackCat) {
-      category = fallbackCat;
+  if (!category) {
+    const { data: catData } = await supabaseAdmin
+      .from("Category")
+      .select("id, name, slug, description")
+      .eq("slug", slug)
+      .maybeSingle();
+
+    if (catData) {
+      category = catData;
     }
   }
 
@@ -46,25 +44,26 @@ export default async function CategoryDetailPage({
     );
   }
 
-  // Fetch products in this category with resilient fallback
-  let productsList: any[] = [];
-  const { data: rawProducts } = await supabaseAdmin
-    .from("Product")
-    .select(`
-      id, name, slug, mrp, sellingPrice, images,
-      ProductVariant ( id, name, stock, sellingPriceOverride, mrpOverride )
-    `)
-    .eq("categoryId", category.id)
-    .eq("isActive", true)
-    .order("createdAt", { ascending: false });
+  // Filter matching products from memory-cached catalog
+  let productsList: any[] = allProducts.filter(
+    (p) => p.category_slug === slug || p.categoryId === category!.id
+  );
 
-  if (rawProducts && rawProducts.length > 0) {
-    productsList = rawProducts;
-  } else {
-    const storeData = await getStorefrontData();
-    productsList = storeData.allProducts.filter(
-      (p) => p.category_slug === slug || p.categoryId === category!.id
-    );
+  // Fallback to direct DB query only if memory cache had no products for this category
+  if (productsList.length === 0) {
+    const { data: rawProducts } = await supabaseAdmin
+      .from("Product")
+      .select(`
+        id, name, slug, mrp, sellingPrice, images,
+        ProductVariant ( id, name, stock, sellingPriceOverride, mrpOverride )
+      `)
+      .eq("categoryId", category.id)
+      .eq("isActive", true)
+      .order("createdAt", { ascending: false });
+
+    if (rawProducts && rawProducts.length > 0) {
+      productsList = rawProducts;
+    }
   }
 
   const products = productsList.map((p) => {

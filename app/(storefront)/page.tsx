@@ -140,6 +140,7 @@ export default async function HomePage() {
               <Link
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
+                prefetch={true}
                 className={`group relative overflow-hidden flex flex-col items-center rounded-2xl sm:rounded-3xl bg-[#F4F5F7] border border-gray-200/80 p-4 sm:p-7 shadow-xs transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-red-300 hover:bg-white active:scale-98 cursor-pointer ${
                   idx === 2 && categories.length === 3 ? "col-span-2 sm:col-span-1" : ""
                 }`}

@@ -88,7 +88,7 @@ export function ProductCard({
         </div>
 
         {/* Product Image Area */}
-        <Link href={`/product/${slug}`} className="block overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
+        <Link href={`/product/${slug}`} prefetch={true} className="block overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
           {displayImage ? (
             <img
               src={displayImage}
@@ -153,6 +153,7 @@ export function ProductCard({
           </button>
           <Link
             href={`/product/${slug}`}
+            prefetch={true}
             className="flex items-center justify-center gap-1 rounded-xl sm:rounded-2xl bg-[#111625] py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white shadow-xs transition-all duration-200 hover:bg-red-600 hover:scale-102 active:scale-95 hover:shadow-md"
           >
             <span>Details</span>

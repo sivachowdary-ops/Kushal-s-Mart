@@ -107,7 +107,9 @@ export async function GET(request: Request) {
   });
 
   if (productSlug) {
-    return NextResponse.json({ product: products[0] || null });
+    return NextResponse.json({ product: products[0] || null }, {
+      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
+    });
   }
   return NextResponse.json({ products }, {
     headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" },
