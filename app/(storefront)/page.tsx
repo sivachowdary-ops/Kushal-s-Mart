@@ -86,7 +86,7 @@ function TrackOrderSection() {
  * Hero → Categories Tiles → Best Sellers (real photos only) → Deals & Collections → Track Order → Trust
  */
 export default async function HomePage() {
-  const { categories, allProducts } = await getStorefrontData();
+  const { categories, subcategories, allProducts } = await getStorefrontData();
 
   // §1 Critical Constraint: Every product in Best Sellers MUST have its verified real photo
   const bestSellers = allProducts
@@ -134,47 +134,61 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          {/* 3 Clickable Category Cards — 2 on mobile (with 3rd spanning nicely), 3 on tablet/desktop */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
-            {categories.map((cat, idx) => (
-              <Link
-                key={cat.slug}
-                href={`/category/${cat.slug}`}
-                prefetch={true}
-                className={`group relative overflow-hidden flex flex-col items-center rounded-2xl sm:rounded-3xl bg-[#F4F5F7] border border-gray-200/80 p-4 sm:p-7 shadow-xs transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-red-300 hover:bg-white active:scale-98 cursor-pointer ${
-                  idx === 2 && categories.length === 3 ? "col-span-2 sm:col-span-1" : ""
-                }`}
-              >
-                <div className="flex h-24 w-24 sm:h-32 sm:w-32 items-center justify-center rounded-2xl bg-white border border-gray-100 p-3 shadow-xs transition-all duration-300 group-hover:scale-110 group-hover:bg-red-50/80 group-hover:border-red-200 group-hover:shadow-md">
-                  {cat.imageUrl ? (
-                    <img
-                      src={cat.imageUrl}
-                      alt={cat.name}
-                      className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center">
-                      {cat.slug === "rc-cars" ? (
-                        <Car className="h-10 w-10 text-red-600 transition-transform group-hover:scale-110" />
-                      ) : cat.slug === "diecast-metal-cars" ? (
-                        <Trophy className="h-10 w-10 text-yellow-600 transition-transform group-hover:scale-110" />
-                      ) : (
-                        <Sparkles className="h-10 w-10 text-indigo-600 transition-transform group-hover:scale-110" />
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 sm:mt-4 text-center">
-                  <span className="text-xs sm:text-base font-extrabold text-gray-900 transition-colors duration-200 group-hover:text-red-600 block line-clamp-1">
-                    {cat.name}
-                  </span>
-                  <span className="mt-0.5 sm:mt-1 inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-gray-500 group-hover:text-red-600 transition-colors">
-                    Explore Models <ArrowRight className="h-2.5 w-2.5 sm:h-3 sm:w-3 transition-transform group-hover:translate-x-1" />
-                  </span>
-                </div>
-              </Link>
-            ))}
+          {/* Clickable Category Cards — Image is the aesthetic card, name sits cleanly below */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8">
+            {categories.map((cat, idx) => {
+              const catSubcategories = (subcategories || []).filter(
+                (s) => s.categoryId === cat.id || s.category_id === cat.id
+              );
+              return (
+                <Link
+                  key={cat.slug}
+                  href={`/category/${cat.slug}`}
+                  prefetch={true}
+                  className={`group flex flex-col items-center cursor-pointer ${
+                    idx === 2 && categories.length === 3 ? "col-span-2 sm:col-span-1" : ""
+                  }`}
+                >
+                  {/* The Image Card itself */}
+                  <div className="w-full aspect-[4/3] sm:aspect-square max-w-[280px] rounded-3xl bg-[#F8F9FA] border border-gray-200/90 p-4 sm:p-7 shadow-xs flex items-center justify-center transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:border-red-300 group-hover:bg-white group-hover:ring-4 group-hover:ring-red-500/5">
+                    {cat.imageUrl ? (
+                      <img
+                        src={cat.imageUrl}
+                        alt={cat.name}
+                        className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center">
+                        {cat.slug === "rc-cars" ? (
+                          <Car className="h-12 w-12 text-red-600 transition-transform duration-300 group-hover:scale-110" />
+                        ) : cat.slug === "diecast-metal-cars" ? (
+                          <Trophy className="h-12 w-12 text-yellow-600 transition-transform duration-300 group-hover:scale-110" />
+                        ) : (
+                          <Sparkles className="h-12 w-12 text-indigo-600 transition-transform duration-300 group-hover:scale-110" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Name and Subtitle cleanly below image */}
+                  <div className="mt-3.5 sm:mt-4 text-center px-1">
+                    <span className="text-sm sm:text-lg font-black text-gray-900 transition-colors duration-200 group-hover:text-red-600 block leading-tight">
+                      {cat.name}
+                    </span>
+                    {catSubcategories.length > 0 ? (
+                      <p className="mt-1 text-[11px] sm:text-xs text-gray-500 font-medium line-clamp-1 max-w-[240px]">
+                        {catSubcategories.map((s) => s.name).join(" · ")}
+                      </p>
+                    ) : (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold text-gray-500 group-hover:text-red-600 transition-colors">
+                        Explore Models <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>

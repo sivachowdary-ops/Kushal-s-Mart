@@ -75,6 +75,20 @@ export function toVariantDB(v: Record<string, unknown>, productId?: string, prod
   return row;
 }
 
+// ── SubCategory ────────────────────────────────────────────
+
+export function normalizeSubCategory(s: Record<string, unknown>) {
+  return {
+    id: s.id as string,
+    name: s.name as string,
+    slug: s.slug as string,
+    category_id: (s.categoryId as string) || (s.category_id as string),
+    sort_order: (s.sortOrder as number) || (s.sort_order as number) || 0,
+    created_at: s.createdAt as string,
+    updated_at: s.updatedAt as string,
+  };
+}
+
 // ── Product ────────────────────────────────────────────────
 
 export function normalizeProduct(p: Record<string, unknown>) {
@@ -85,6 +99,8 @@ export function normalizeProduct(p: Record<string, unknown>) {
     slug: p.slug as string,
     description: p.description as string,
     category_id: p.categoryId as string,
+    sub_category_id: (p.subCategoryId as string) || null,
+    sub_category_slug: (p.subCategorySlug as string) || (p.SubCategory ? ((p.SubCategory as Record<string, unknown>).slug as string) : null),
     brand: (p.brand as string) || null,
     mrp: p.mrp as number,
     selling_price: p.sellingPrice as number,
@@ -102,6 +118,13 @@ export function normalizeProduct(p: Record<string, unknown>) {
     updated_at: p.updatedAt as string,
     categories: p.Category
       ? { id: (p.Category as Record<string, unknown>).id, name: (p.Category as Record<string, unknown>).name }
+      : null,
+    sub_categories: p.SubCategory
+      ? {
+          id: (p.SubCategory as Record<string, unknown>).id,
+          name: (p.SubCategory as Record<string, unknown>).name,
+          slug: (p.SubCategory as Record<string, unknown>).slug,
+        }
       : null,
     variants,
     product_variants: variants, // alias for compatibility
@@ -127,6 +150,12 @@ export function toProductDB(body: Record<string, unknown>) {
     heightCm: body.height_cm ? Number(body.height_cm) : 20,
     updatedAt: new Date().toISOString(),
   };
+  if (body.sub_category_id !== undefined) {
+    row.subCategoryId = body.sub_category_id || null;
+  }
+  if (body.sub_category_slug !== undefined) {
+    row.subCategorySlug = body.sub_category_slug || null;
+  }
   if (body.specifications !== undefined) {
     row.specifications = body.specifications;
   }

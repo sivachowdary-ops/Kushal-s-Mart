@@ -17,6 +17,8 @@ export interface AdminProduct {
   slug: string;
   description: string;
   category_id: string | null;
+  sub_category_id?: string | null;
+  sub_category_slug?: string | null;
   brand: string | null;
   mrp: number; // paise
   selling_price: number; // paise
@@ -33,9 +35,18 @@ export interface AdminProduct {
   is_active: boolean;
   variants?: AdminVariant[];
   categories?: { id: string; name: string } | null;
+  sub_categories?: { id: string; name: string; slug: string } | null;
   product_variants?: AdminVariant[];
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminSubCategory {
+  id: string;
+  name: string;
+  slug: string;
+  category_id: string;
+  sort_order: number;
 }
 
 export interface AdminVariant {
@@ -156,6 +167,10 @@ interface AdminStoreContextType {
   deleteCategory: (id: string) => Promise<boolean>;
   refreshCategories: () => Promise<void>;
 
+  // Subcategories
+  subcategories: AdminSubCategory[];
+  refreshSubcategories: () => Promise<void>;
+
   // Orders
   orders: AdminOrder[];
   orderItems: AdminOrderItem[];
@@ -224,6 +239,16 @@ export function AdminStoreProvider({
 }) {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<AdminSubCategory[]>([
+    { id: "sub-diecast-1-18", name: "1/18 Scale", slug: "1-18-scale", category_id: "cat-diecast", sort_order: 1 },
+    { id: "sub-diecast-1-24", name: "1/24 Scale", slug: "1-24-scale", category_id: "cat-diecast", sort_order: 2 },
+    { id: "sub-diecast-1-32", name: "1/32 Scale", slug: "1-32-scale", category_id: "cat-diecast", sort_order: 3 },
+    { id: "sub-diecast-1-43", name: "1/43 Scale", slug: "1-43-scale", category_id: "cat-diecast", sort_order: 4 },
+    { id: "sub-diecast-1-64", name: "1/64 Scale", slug: "1-64-scale", category_id: "cat-diecast", sort_order: 5 },
+    { id: "sub-diecast-hotwheels", name: "Hotwheels", slug: "hotwheels", category_id: "cat-diecast", sort_order: 6 },
+    { id: "sub-rc-off-road", name: "Off Road", slug: "off-road", category_id: "cat-rc-cars", sort_order: 1 },
+    { id: "sub-rc-on-road", name: "On Road", slug: "on-road", category_id: "cat-rc-cars", sort_order: 2 },
+  ]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -259,6 +284,25 @@ export function AdminStoreProvider({
     }
   }, []);
 
+  const refreshSubcategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/storefront/subcategories");
+      if (res.ok) {
+        const data = await res.json();
+        const subs = (data.subcategories || []).map((s: Record<string, unknown>) => ({
+          id: s.id as string,
+          name: s.name as string,
+          slug: s.slug as string,
+          category_id: (s.categoryId as string) || (s.category_id as string),
+          sort_order: (s.sortOrder as number) || (s.sort_order as number) || 0,
+        }));
+        if (subs.length > 0) setSubcategories(subs);
+      }
+    } catch (e) {
+      console.error("Failed to fetch subcategories:", e);
+    }
+  }, []);
+
   const refreshOrders = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
@@ -280,6 +324,7 @@ export function AdminStoreProvider({
         await Promise.all([
           refreshProducts(),
           refreshCategories(),
+          refreshSubcategories(),
           refreshOrders(),
         ]);
       } catch (e) {
@@ -290,7 +335,7 @@ export function AdminStoreProvider({
       }
     }
     loadAll();
-  }, [refreshProducts, refreshCategories, refreshOrders]);
+  }, [refreshProducts, refreshCategories, refreshSubcategories, refreshOrders]);
 
   // ── Derived: flat order items array ──
 
@@ -735,6 +780,8 @@ export function AdminStoreProvider({
         updateCategory,
         deleteCategory,
         refreshCategories,
+        subcategories,
+        refreshSubcategories,
         orders,
         orderItems,
         addOrder,

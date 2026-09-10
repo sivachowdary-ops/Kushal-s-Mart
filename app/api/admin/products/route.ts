@@ -32,11 +32,24 @@ export async function POST(request: Request) {
 
     const dbRow = toProductDB(productBody);
 
-    const { data: product, error: productError } = await supabaseAdmin
+    let { data: product, error: productError } = await supabaseAdmin
       .from("Product")
       .insert([dbRow])
       .select()
       .single();
+
+    if (productError && (productError.code === "42703" || productError.message.includes("subCategory"))) {
+      const fallbackRow = { ...dbRow };
+      delete fallbackRow.subCategoryId;
+      delete fallbackRow.subCategorySlug;
+      const retry = await supabaseAdmin
+        .from("Product")
+        .insert([fallbackRow])
+        .select()
+        .single();
+      product = retry.data;
+      productError = retry.error;
+    }
 
     if (productError) return NextResponse.json({ error: productError.message }, { status: 500 });
 

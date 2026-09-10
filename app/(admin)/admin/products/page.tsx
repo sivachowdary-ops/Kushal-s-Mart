@@ -6,9 +6,10 @@ import Link from "next/link";
 import { Plus, Search, Edit, Trash2, Tag, AlertCircle } from "lucide-react";
 
 export default function ProductsPage() {
-  const { products, categories, isLoading, error, refreshProducts, deleteProduct } = useAdminStore();
+  const { products, categories, subcategories, isLoading, error, refreshProducts, deleteProduct } = useAdminStore();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("ALL");
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,7 +20,10 @@ export default function ProductsPage() {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
                           (p.brand && p.brand.toLowerCase().includes(search.toLowerCase()));
     const matchesCategory = categoryFilter === "ALL" || p.category_id === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesSubcategory = subcategoryFilter === "ALL" || 
+                               p.sub_category_id === subcategoryFilter ||
+                               p.sub_category_slug === subcategoryFilter;
+    return matchesSearch && matchesCategory && matchesSubcategory;
   });
 
   const handleDelete = async (id: string) => {
@@ -70,19 +74,38 @@ export default function ProductsPage() {
               className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Tag className="h-4 w-4 text-slate-400" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Tag className="h-4 w-4 text-slate-400" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setSubcategoryFilter("ALL");
+                }}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="ALL">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={subcategoryFilter}
+              onChange={(e) => setSubcategoryFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="ALL">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
+              <option value="ALL">All Subcategories</option>
+              {subcategories
+                .filter((s) => categoryFilter === "ALL" || s.category_id === categoryFilter)
+                .map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
@@ -92,11 +115,12 @@ export default function ProductsPage() {
             <Tag className="mb-4 h-12 w-12 text-slate-300" />
             <p className="text-lg font-medium text-slate-900">No products found</p>
             <p className="mt-1">No products yet — add your first product</p>
-            {search || categoryFilter !== "ALL" ? (
+            {search || categoryFilter !== "ALL" || subcategoryFilter !== "ALL" ? (
               <button
                 onClick={() => {
                   setSearch("");
                   setCategoryFilter("ALL");
+                  setSubcategoryFilter("ALL");
                 }}
                 className="mt-4 text-blue-600 hover:underline"
               >
@@ -154,13 +178,25 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {category ? (
-                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">
-                            {category.name}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          {category ? (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-800">
+                              {category.name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
+                          {(() => {
+                            const subcategory = subcategories.find(
+                              (s) => s.id === product.sub_category_id || s.slug === product.sub_category_slug
+                            ) || (product.sub_categories?.name ? { name: product.sub_categories.name } : null);
+                            return subcategory ? (
+                              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 border border-blue-200/60">
+                                {subcategory.name}
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-900">
                         ₹{(product.selling_price / 100).toLocaleString("en-IN")}

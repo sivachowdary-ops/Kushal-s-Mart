@@ -19,6 +19,16 @@ export interface StorefrontVariant {
   images?: string[];
 }
 
+export interface StorefrontSubCategory {
+  id: string;
+  name: string;
+  slug: string;
+  categoryId: string;
+  category_id?: string;
+  sortOrder: number;
+  sort_order?: number;
+}
+
 export interface StorefrontProduct {
   id: string;
   name: string;
@@ -33,6 +43,12 @@ export interface StorefrontProduct {
   categoryId: string;
   category_slug: string;
   category_name: string;
+  subCategoryId?: string | null;
+  subCategorySlug?: string | null;
+  subCategoryName?: string | null;
+  sub_category_id?: string | null;
+  sub_category_slug?: string | null;
+  sub_category_name?: string | null;
   discountPercent: number;
   badgeType: "DEALS" | "SAVE" | "NEW" | "BESTSELLER";
   inStock: boolean;
@@ -103,6 +119,59 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     }
   }
 
+  // Resolve subcategory robustly:
+  let subCategoryId = p.subCategoryId || p.sub_category_id || null;
+  let subCategorySlug = p.subCategorySlug || p.sub_category_slug || (p.SubCategory?.slug || null);
+  let subCategoryName = p.SubCategory?.name || null;
+
+  if (!subCategorySlug) {
+    const text = `${p.name} ${p.slug}`.toLowerCase();
+    if (categorySlug === "diecast-metal-cars") {
+      if (text.includes("1/18") || text.includes("1:18")) {
+        subCategorySlug = "1-18-scale";
+        subCategoryId = "sub-diecast-1-18";
+        subCategoryName = "1/18 Scale";
+      } else if (text.includes("1/24") || text.includes("1:24") || text.includes("mini cooper") || text.includes("defender")) {
+        subCategorySlug = "1-24-scale";
+        subCategoryId = "sub-diecast-1-24";
+        subCategoryName = "1/24 Scale";
+      } else if (text.includes("1/32") || text.includes("1:32")) {
+        subCategorySlug = "1-32-scale";
+        subCategoryId = "sub-diecast-1-32";
+        subCategoryName = "1/32 Scale";
+      } else if (text.includes("1/43") || text.includes("1:43")) {
+        subCategorySlug = "1-43-scale";
+        subCategoryId = "sub-diecast-1-43";
+        subCategoryName = "1/43 Scale";
+      } else if (text.includes("hotwheels") || text.includes("hot wheels")) {
+        subCategorySlug = "hotwheels";
+        subCategoryId = "sub-diecast-hotwheels";
+        subCategoryName = "Hotwheels";
+      } else {
+        subCategorySlug = "1-64-scale";
+        subCategoryId = "sub-diecast-1-64";
+        subCategoryName = "1/64 Scale";
+      }
+    } else if (categorySlug === "rc-cars") {
+      if (
+        text.includes("monster") ||
+        text.includes("thar") ||
+        text.includes("crawler") ||
+        text.includes("police truck") ||
+        text.includes("suchiyu") ||
+        text.includes("off-road")
+      ) {
+        subCategorySlug = "off-road";
+        subCategoryId = "sub-rc-off-road";
+        subCategoryName = "Off Road";
+      } else {
+        subCategorySlug = "on-road";
+        subCategoryId = "sub-rc-on-road";
+        subCategoryName = "On Road";
+      }
+    }
+  }
+
   const imagesList = Array.isArray(p.images) ? p.images : [];
 
   return {
@@ -119,6 +188,12 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     categoryId: p.categoryId || "cat-rc-cars",
     category_slug: categorySlug,
     category_name: categoryName || "Models",
+    subCategoryId,
+    subCategorySlug,
+    subCategoryName,
+    sub_category_id: subCategoryId,
+    sub_category_slug: subCategorySlug,
+    sub_category_name: subCategoryName,
     discountPercent: disc,
     badgeType: (disc >= 25 ? "DEALS" : "SAVE"),
     inStock,
@@ -126,11 +201,26 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   };
 }
 
+export const DEFAULT_SUBCATEGORIES: StorefrontSubCategory[] = [
+  { id: "sub-diecast-1-18", name: "1/18 Scale", slug: "1-18-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 1, sort_order: 1 },
+  { id: "sub-diecast-1-24", name: "1/24 Scale", slug: "1-24-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 2, sort_order: 2 },
+  { id: "sub-diecast-1-32", name: "1/32 Scale", slug: "1-32-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 3, sort_order: 3 },
+  { id: "sub-diecast-1-43", name: "1/43 Scale", slug: "1-43-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 4, sort_order: 4 },
+  { id: "sub-diecast-1-64", name: "1/64 Scale", slug: "1-64-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 5, sort_order: 5 },
+  { id: "sub-diecast-hotwheels", name: "Hotwheels", slug: "hotwheels", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 6, sort_order: 6 },
+  { id: "sub-rc-off-road", name: "Off Road", slug: "off-road", categoryId: "cat-rc-cars", category_id: "cat-rc-cars", sortOrder: 1, sort_order: 1 },
+  { id: "sub-rc-on-road", name: "On Road", slug: "on-road", categoryId: "cat-rc-cars", category_id: "cat-rc-cars", sortOrder: 2, sort_order: 2 },
+];
+
 /**
  * Fetches homepage products and categories with built-in retry and in-memory fallback.
  * Prevents the homepage from EVER displaying "Coming Soon" due to cold starts or network glitches.
  */
-export async function getStorefrontData(forceRefresh = false) {
+export async function getStorefrontData(forceRefresh = false): Promise<{
+  categories: StorefrontCategory[];
+  subcategories: StorefrontSubCategory[];
+  allProducts: StorefrontProduct[];
+}> {
   const now = Date.now();
   if (
     !forceRefresh &&
@@ -142,6 +232,7 @@ export async function getStorefrontData(forceRefresh = false) {
     cachedCategories.forEach((c) => categorySlugMap.set(c.id, c.slug));
     return {
       categories: cachedCategories,
+      subcategories: DEFAULT_SUBCATEGORIES,
       allProducts: cachedRawProducts.map((p) => normalizeStoreProduct(p, categorySlugMap)),
     };
   }
@@ -216,6 +307,7 @@ export async function getStorefrontData(forceRefresh = false) {
 
   return {
     categories: activeCategories,
+    subcategories: DEFAULT_SUBCATEGORIES,
     allProducts,
   };
 }

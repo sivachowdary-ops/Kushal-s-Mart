@@ -4,7 +4,7 @@ import { getStorefrontData } from "@/lib/storefront-data";
 
 // Server Component — fetches real categories from Supabase at request time
 export default async function CategoriesPage() {
-  const { categories: cats, allProducts } = await getStorefrontData();
+  const { categories: cats, subcategories, allProducts } = await getStorefrontData();
 
   const countMap: Record<string, number> = {};
   allProducts.forEach((p) => {
@@ -48,42 +48,72 @@ export default async function CategoriesPage() {
             <p className="text-gray-500 font-medium">Categories are being set up. Check back soon!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-            {categories.map((cat) => (
-              <Link
-                key={cat.slug}
-                href={`/category/${cat.slug}`}
-                prefetch={true}
-                className="group flex flex-col items-center gap-2 sm:gap-4 rounded-2xl sm:rounded-3xl bg-white border border-gray-200/80 p-4 sm:p-8 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-red-200"
-              >
-                {/* Category Icon / Image */}
-                <div className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-2xl sm:rounded-full bg-gray-50 border border-gray-100 p-2 sm:p-4 transition-all duration-300 group-hover:scale-105 group-hover:bg-red-50 group-hover:border-red-100">
-                  {cat.imageUrl ? (
-                    <img
-                      src={cat.imageUrl}
-                      alt={cat.name}
-                      className="h-12 w-12 sm:h-16 sm:w-16 object-contain transition-transform duration-300 group-hover:scale-110"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <Tag className="h-8 w-8 sm:h-10 sm:w-10 text-gray-300 group-hover:text-red-400 transition-colors" />
-                  )}
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {categories.map((cat) => {
+              const catSubcategories = (subcategories || []).filter(
+                (s) => s.categoryId === cat.id || s.category_id === cat.id
+              );
 
-                {/* Name */}
-                <div className="text-center">
-                  <span className="text-xs sm:text-base font-extrabold text-gray-900 transition-colors group-hover:text-red-600 block line-clamp-1">
-                    {cat.name}
-                  </span>
-                  {cat.description && (
-                    <p className="text-[10px] sm:text-xs text-gray-500 mt-1 line-clamp-2 hidden sm:block">{cat.description}</p>
-                  )}
-                  <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 uppercase tracking-wider mt-1 sm:mt-2 block">
-                    {cat.product_count > 0 ? `${cat.product_count} Products` : "Coming Soon"}
-                  </span>
+              return (
+                <div key={cat.slug} className="group flex flex-col items-center">
+                  {/* Category Image Card */}
+                  <Link
+                    href={`/category/${cat.slug}`}
+                    prefetch={true}
+                    className="w-full aspect-square max-w-[280px] rounded-3xl bg-white border border-gray-200/90 p-6 shadow-sm flex items-center justify-center transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:border-red-300 group-hover:ring-4 group-hover:ring-red-500/5 cursor-pointer"
+                  >
+                    {cat.imageUrl ? (
+                      <img
+                        src={cat.imageUrl}
+                        alt={cat.name}
+                        className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Tag className="h-14 w-14 text-gray-300 group-hover:text-red-500 transition-colors" />
+                    )}
+                  </Link>
+
+                  {/* Name and Info Cleanly Below Image */}
+                  <div className="mt-4 text-center w-full px-2">
+                    <Link
+                      href={`/category/${cat.slug}`}
+                      prefetch={true}
+                      className="text-lg font-black text-gray-900 transition-colors group-hover:text-red-600 inline-block hover:underline"
+                    >
+                      {cat.name}
+                    </Link>
+
+                    {cat.description && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2 max-w-xs mx-auto">
+                        {cat.description}
+                      </p>
+                    )}
+
+                    {/* Subcategories list / pills */}
+                    {catSubcategories.length > 0 && (
+                      <div className="mt-3 flex flex-wrap justify-center gap-1.5 max-w-xs mx-auto">
+                        {catSubcategories.map((sub) => (
+                          <Link
+                            key={sub.id}
+                            href={`/category/${cat.slug}?sub=${sub.slug}`}
+                            className="rounded-full bg-white border border-gray-200/80 px-2.5 py-1 text-[11px] font-bold text-gray-700 shadow-2xs hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all"
+                          >
+                            {sub.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-2.5">
+                      <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">
+                        {cat.product_count > 0 ? `${cat.product_count} Products Available` : "Coming Soon"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

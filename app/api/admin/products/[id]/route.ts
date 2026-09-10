@@ -34,13 +34,23 @@ export async function PUT(
     const body = await request.json();
     const { variants, ...productBody } = body;
 
-    // CHANGED: "products"→"Product", column names converted to camelCase
     const dbRow = toProductDB(productBody);
     delete dbRow.id; // Do not overwrite existing ID on update
-    const { error: productError } = await supabaseAdmin
+    let { error: productError } = await supabaseAdmin
       .from("Product")
       .update(dbRow)
       .eq("id", id);
+
+    if (productError && (productError.code === "42703" || productError.message.includes("subCategory"))) {
+      const fallbackRow = { ...dbRow };
+      delete fallbackRow.subCategoryId;
+      delete fallbackRow.subCategorySlug;
+      const retry = await supabaseAdmin
+        .from("Product")
+        .update(fallbackRow)
+        .eq("id", id);
+      productError = retry.error;
+    }
 
     if (productError) return NextResponse.json({ error: productError.message }, { status: 500 });
 

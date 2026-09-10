@@ -11,7 +11,7 @@ import { ImageUploader } from "@/components/admin/image-uploader";
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const { products, categories, updateProduct, isLoading, refreshProducts } = useAdminStore();
+  const { products, categories, subcategories, updateProduct, isLoading, refreshProducts } = useAdminStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -20,6 +20,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [subCategoryId, setSubCategoryId] = useState("");
   const [brand, setBrand] = useState("");
   const [mrp, setMrp] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
@@ -66,6 +67,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         setSlug(product.slug || "");
         setDescription(product.description || "");
         setCategoryId(product.category_id || "");
+        setSubCategoryId(product.sub_category_id || "");
         setBrand(product.brand || "");
         setMrp(product.mrp ? (product.mrp / 100).toString() : "");
         setSellingPrice(product.selling_price ? (product.selling_price / 100).toString() : "");
@@ -119,6 +121,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         slug,
         description,
         category_id: categoryId || null,
+        sub_category_id: subCategoryId || null,
         brand,
         mrp: Math.round(parseFloat(mrp || "0") * 100),
         selling_price: Math.round(parseFloat(sellingPrice || "0") * 100),
@@ -240,10 +243,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500">
+                    <select
+                      value={categoryId}
+                      onChange={(e) => {
+                        setCategoryId(e.target.value);
+                        setSubCategoryId("");
+                      }}
+                      className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
                       <option value="">Select a category...</option>
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
@@ -251,8 +261,39 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                     </select>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Subcategory
+                      {categoryId && (
+                        <span className="text-xs text-blue-600 font-normal ml-1">
+                          ({subcategories.filter((s) => s.category_id === categoryId).length})
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={subCategoryId}
+                      onChange={(e) => setSubCategoryId(e.target.value)}
+                      disabled={!categoryId}
+                      className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      <option value="">
+                        {!categoryId
+                          ? "Select category first..."
+                          : subcategories.filter((s) => s.category_id === categoryId).length === 0
+                          ? "No subcategories"
+                          : "Select subcategory (optional)..."}
+                      </option>
+                      {subcategories
+                        .filter((s) => s.category_id === categoryId)
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
-                    <input type="text" value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500" />
+                    <input type="text" value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                   </div>
                 </div>
               </div>

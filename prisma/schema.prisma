@@ -13,14 +13,29 @@ datasource db {
 }
 
 model Category {
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  description   String?
+  imageUrl      String?
+  sortOrder     Int           @default(0)
+  products      Product[]
+  subCategories SubCategory[]
+  createdAt     DateTime      @default(now())
+}
+
+model SubCategory {
   id          String    @id @default(cuid())
   name        String
   slug        String    @unique
-  description String?
-  imageUrl    String?
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   sortOrder   Int       @default(0)
   products    Product[]
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([categoryId])
 }
 
 model Product {
@@ -30,6 +45,9 @@ model Product {
   description     String
   categoryId      String
   category        Category         @relation(fields: [categoryId], references: [id])
+  subCategoryId   String?
+  subCategory     SubCategory?     @relation(fields: [subCategoryId], references: [id])
+  subCategorySlug String?
   brand           String?
   mrp             Int              // paise
   sellingPrice    Int              // paise
@@ -48,6 +66,7 @@ model Product {
   updatedAt       DateTime         @updatedAt
 
   @@index([categoryId])
+  @@index([subCategoryId])
   @@index([isActive])
 }
 
