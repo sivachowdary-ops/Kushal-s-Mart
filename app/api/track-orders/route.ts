@@ -74,26 +74,54 @@ export async function GET(request: Request) {
     const rawAwb = (o.shiprocketAwb as string) || "";
     const cleanAwb = rawAwb && !rawAwb.startsWith("KM-") && rawAwb !== o.orderNumber ? rawAwb : null;
 
+    // Normalize status into chronological 5-stage pipeline:
+    // 1: PENDING (Placed) -> 2: PROCESSING (Paid) -> 3: PACKED (AWB created) -> 4: SHIPPED / OUT_FOR_DELIVERY -> 5: DELIVERED
+    const rawStatus = ((o.status as string) || "PENDING").toUpperCase();
+    const paymentStatus = ((o.paymentStatus as string) || "").toUpperCase();
+
+    let normalizedStatus = "PENDING";
+    let stageLevel = 1;
+
+    if (rawStatus === "DELIVERED" || rawStatus === "COMPLETED") {
+      normalizedStatus = "DELIVERED";
+      stageLevel = 5;
+    } else if (rawStatus === "OUT_FOR_DELIVERY") {
+      normalizedStatus = "OUT_FOR_DELIVERY";
+      stageLevel = 4;
+    } else if (rawStatus === "SHIPPED") {
+      normalizedStatus = "SHIPPED";
+      stageLevel = 4;
+    } else if (rawStatus === "PACKED") {
+      normalizedStatus = "PACKED";
+      stageLevel = 3;
+    } else if (rawStatus === "PAID" || rawStatus === "PROCESSING" || paymentStatus === "PAID") {
+      normalizedStatus = cleanAwb ? "PACKED" : "PROCESSING";
+      stageLevel = cleanAwb ? 3 : 2;
+    } else {
+      normalizedStatus = "PENDING";
+      stageLevel = 1;
+    }
+
     const timeline: { status: string; timestamp: string; note?: string }[] = [
       { status: "PENDING", timestamp: createdAt, note: "Order placed successfully" },
     ];
-    if (currentIdx >= 1) {
-      timeline.push({ status: "PROCESSING", timestamp: updatedAt, note: "Payment verified, preparing order" });
+    if (stageLevel >= 2) {
+      timeline.push({ status: "PROCESSING", timestamp: updatedAt, note: "Payment verified, order preparing for packing" });
     }
-    if (currentIdx >= 2) {
-      timeline.push({ status: "PACKED", timestamp: updatedAt, note: "Items packed securely with quality check" });
+    if (stageLevel >= 3) {
+      timeline.push({ status: "PACKED", timestamp: updatedAt, note: `Packed & ready for dispatch with ${o.courierName || "Delhivery Express"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}` });
     }
-    if (currentIdx >= 3) {
-      timeline.push({ status: "SHIPPED", timestamp: updatedAt, note: `Dispatched with ${o.courierName || "Express Courier"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}` });
+    if (stageLevel >= 4) {
+      timeline.push({ status: rawStatus === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY" : "SHIPPED", timestamp: updatedAt, note: `Package dispatched and moving in transit` });
     }
-    if (currentIdx >= 4) {
+    if (stageLevel >= 5) {
       timeline.push({ status: "DELIVERED", timestamp: updatedAt, note: "Package handed over to recipient" });
     }
 
     return {
       id: o.id as string || (o.orderNumber as string),
       order_number: o.orderNumber,
-      status: currentStatus,
+      status: normalizedStatus,
       customer_name: o.customerName,
       subtotal: o.subtotal,
       discount: o.discount,

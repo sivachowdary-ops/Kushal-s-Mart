@@ -38,7 +38,9 @@ const STATUS_STEPS = ["PENDING", "PROCESSING", "PACKED", "SHIPPED", "DELIVERED"]
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Order Placed",
+  PENDING_PAYMENT: "Order Placed",
   PROCESSING: "Payment Verified & Processing",
+  PAID: "Payment Verified & Processing",
   PACKED: "Packed & Ready to Ship",
   SHIPPED: "Dispatched / In Transit",
   OUT_FOR_DELIVERY: "Out for Delivery",
@@ -48,7 +50,9 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  PENDING_PAYMENT: "bg-yellow-100 text-yellow-800 border-yellow-200",
   PROCESSING: "bg-blue-100 text-blue-800 border-blue-200",
+  PAID: "bg-blue-100 text-blue-800 border-blue-200",
   PACKED: "bg-indigo-100 text-indigo-800 border-indigo-200",
   SHIPPED: "bg-purple-100 text-purple-800 border-purple-200",
   OUT_FOR_DELIVERY: "bg-amber-100 text-amber-800 border-amber-200",
@@ -77,7 +81,13 @@ function formatDate(iso: string) {
 
 function OrderCard({ order }: { order: TrackedOrder }) {
   const [expanded, setExpanded] = useState(false);
-  const currentStepIndex = STATUS_STEPS.indexOf(order.status);
+  const normalizedStep =
+    order.status === "PAID" ? "PROCESSING" :
+    order.status === "OUT_FOR_DELIVERY" ? "SHIPPED" :
+    order.status === "PENDING_PAYMENT" ? "PENDING" :
+    order.status;
+
+  const currentStepIndex = STATUS_STEPS.indexOf(normalizedStep);
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden">
@@ -95,7 +105,7 @@ function OrderCard({ order }: { order: TrackedOrder }) {
                 STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800 border-gray-200"
               }`}
             >
-              {order.status}
+              {order.status === "PAID" ? "PROCESSING" : order.status}
             </span>
           </div>
         </div>
