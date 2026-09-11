@@ -232,11 +232,39 @@ export default function TrackOrderPage() {
           if (!tracking.hasTracking) return order;
 
           // Merge live Delhivery scans into the timeline
-          const liveScans = (tracking.scans || []).map((s: { scanDateTime: string; scannedLocation: string; instructions: string }) => ({
-            status: tracking.currentStage || order.status,
-            timestamp: s.scanDateTime,
-            note: `${s.scannedLocation ? s.scannedLocation + ": " : ""}${s.instructions || tracking.currentStatus}`,
-          }));
+          const liveScans = (tracking.scans || []).map((s: { scanType: string; scanDateTime: string; scannedLocation: string; instructions: string }) => {
+            const instruction = (s.instructions || "").toLowerCase();
+            const scanType = (s.scanType || "").toLowerCase();
+
+            // Map individual scan to correct status label
+            let scanStatus = "PACKED";
+            if (instruction.includes("delivered") || scanType === "dl") {
+              scanStatus = "DELIVERED";
+            } else if (instruction.includes("out for delivery") || scanType === "od") {
+              scanStatus = "SHIPPED";
+            } else if (
+              instruction.includes("in transit") ||
+              instruction.includes("reached") ||
+              instruction.includes("left") ||
+              scanType === "pu"
+            ) {
+              scanStatus = "SHIPPED";
+            } else if (
+              instruction.includes("manifest") ||
+              instruction.includes("bad") ||
+              instruction.includes("incomplete") ||
+              instruction.includes("address") ||
+              instruction.includes("pickup")
+            ) {
+              scanStatus = "PACKED";
+            }
+
+            return {
+              status: scanStatus,
+              timestamp: s.scanDateTime,
+              note: `${s.scannedLocation ? s.scannedLocation + ": " : ""}${s.instructions || tracking.currentStatus}`,
+            };
+          });
 
           // Build merged timeline: DB entries + live Delhivery scans
           const baseTimeline = order.timeline || [];
