@@ -126,7 +126,7 @@ export async function createDelhiveryShipment(
     data.weightGrams ||
     data.items.reduce((sum, item) => sum + (item.weightGrams || 500) * item.quantity, 0) ||
     500;
-  const weightKg = (computedWeightGrams / 1000).toFixed(2);
+  const weightKg = parseFloat((computedWeightGrams / 1000).toFixed(2));
 
   const productDescription = data.items
     .map((i) => `${i.productName} (x${i.quantity})`)

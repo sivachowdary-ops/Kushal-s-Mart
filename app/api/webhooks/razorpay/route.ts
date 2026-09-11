@@ -202,6 +202,7 @@ export async function POST(request: Request) {
               productName: oi.productName,
               quantity: oi.quantity,
               unitPrice: oi.unitPrice,
+              weightGrams: 500, // Default 500g per item (approved by owner)
             })
           );
 
