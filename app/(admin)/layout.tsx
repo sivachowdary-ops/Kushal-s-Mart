@@ -49,6 +49,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
+          if (session.access_token) {
+            try { localStorage.setItem("admin_token", session.access_token); } catch {}
+          }
           // Verify the user is actually an admin
           const verifyRes = await fetch("/api/admin/auth/login", {
             method: "POST",
@@ -59,6 +62,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             setUserEmail(session.user.email ?? null);
           } else {
             // Not an admin — don't grant access
+            try { localStorage.removeItem("admin_token"); } catch {}
             await supabase.auth.signOut();
           }
         }
@@ -72,9 +76,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        if (session.access_token) {
+          try { localStorage.setItem("admin_token", session.access_token); } catch {}
+        }
         setIsAuthenticated(true);
         setUserEmail(session.user.email ?? null);
       } else {
+        try { localStorage.removeItem("admin_token"); } catch {}
         setIsAuthenticated(false);
         setUserEmail(null);
       }
@@ -141,6 +149,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleLogout = async () => {
+    try { localStorage.removeItem("admin_token"); } catch {}
     setIsAuthenticated(false);
     setUserEmail(null);
     await supabase.auth.signOut();

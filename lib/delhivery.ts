@@ -190,10 +190,18 @@ export async function createDelhiveryShipment(
           length: data.lengthCm || 20,
           breadth: data.widthCm || 20,
           height: data.heightCm || 20,
+          pickup_location: pickupLocation,
         },
       ],
       pickup_location: {
         name: pickupLocation,
+        add: "1-273/8 Kothapeta Veedhi, Prathipadu",
+        city: "Prathipadu",
+        pin: "533432",
+        pin_code: "533432",
+        state: "Andhra Pradesh",
+        country: "India",
+        phone: "7288907757",
       },
     };
 

@@ -47,9 +47,19 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsDispatchingDelhivery(true);
     setDelhiverySuccessMsg(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || "";
-      if (!token) { alert("Admin session expired. Please log in again."); setIsDispatchingDelhivery(false); return; }
+      let token = "";
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token || "";
+      } catch {}
+      if (!token) {
+        try { token = localStorage.getItem("admin_token") || ""; } catch {}
+      }
+      if (!token) {
+        alert("Admin session expired or not found. Please refresh the page or log in again.");
+        setIsDispatchingDelhivery(false);
+        return;
+      }
       const res = await fetch(`/api/admin/orders/${order.id}/delhivery`, {
         method: "POST",
         headers: {
