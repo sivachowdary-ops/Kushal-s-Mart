@@ -46,8 +46,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsDispatchingDelhivery(true);
     setDelhiverySuccessMsg(null);
     try {
+      const token = localStorage.getItem("admin_token") || "";
       const res = await fetch(`/api/admin/orders/${order.id}/delhivery`, {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -72,8 +76,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsCancellingDelhivery(true);
     setDelhiverySuccessMsg(null);
     try {
+      const token = localStorage.getItem("admin_token") || "";
       const res = await fetch(`/api/admin/orders/${order.id}/delhivery/cancel`, {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
       });
       const data = await res.json();
       if (res.ok && data.success) {
