@@ -199,7 +199,7 @@ function CheckoutContent() {
       const keyToUse =
         key_id ||
         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-        "rzp_test_TXBDtvZGtRuyZn";
+        "";
 
       // ── Step 2: Open Razorpay Checkout popup ──────────────────────────────
       const RazorpayConstructor = (window as unknown as {

@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 export async function POST(request: Request) {
+  // Rate-limit admin login: 5 attempts per 15 min per IP (playbook §7.3, §10)
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`admin-login:${ip}`, RATE_LIMITS.adminLogin);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many login attempts. Try again in ${rl.retryAfterSeconds} seconds.` },
+      { status: 429 }
+    );
+  }
   try {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
