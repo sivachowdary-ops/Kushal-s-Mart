@@ -217,6 +217,52 @@ export default function TrackOrderPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState("");
 
+  // Helper: enrich orders with live Delhivery tracking
+  const enrichWithLiveTracking = async (rawOrders: TrackedOrder[]): Promise<TrackedOrder[]> => {
+    const enriched = await Promise.all(
+      rawOrders.map(async (order) => {
+        // Only fetch live tracking for orders with AWB that aren't delivered/cancelled
+        if (!order.shiprocket_awb || ["DELIVERED", "CANCELLED", "COMPLETED"].includes(order.status)) {
+          return order;
+        }
+        try {
+          const res = await fetch(`/api/orders/${order.order_number}/tracking`);
+          if (!res.ok) return order;
+          const tracking = await res.json();
+          if (!tracking.hasTracking) return order;
+
+          // Merge live Delhivery scans into the timeline
+          const liveScans = (tracking.scans || []).map((s: { scanDateTime: string; scannedLocation: string; instructions: string }) => ({
+            status: tracking.currentStage || order.status,
+            timestamp: s.scanDateTime,
+            note: `${s.scannedLocation ? s.scannedLocation + ": " : ""}${s.instructions || tracking.currentStatus}`,
+          }));
+
+          // Build merged timeline: DB entries + live Delhivery scans
+          const baseTimeline = order.timeline || [];
+          const mergedTimeline = liveScans.length > 0
+            ? [...baseTimeline, ...liveScans].sort(
+                (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+              )
+            : baseTimeline;
+
+          return {
+            ...order,
+            status: tracking.currentStage === "DELIVERED" ? "DELIVERED"
+              : tracking.currentStage === "OUT_FOR_DELIVERY" || tracking.currentStage === "SHIPPED" ? "SHIPPED"
+              : order.status,
+            timeline: mergedTimeline,
+            // Add expected delivery if available
+            ...(tracking.expectedDelivery ? { expectedDelivery: tracking.expectedDelivery } : {}),
+          };
+        } catch {
+          return order; // fallback to DB data on error
+        }
+      })
+    );
+    return enriched;
+  };
+
   // Auto-search if phone param is in URL (from the hero strip form)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -227,7 +273,12 @@ export default function TrackOrderPage() {
       setIsLoading(true);
       fetch(`/api/track-orders?phone=${digits}`)
         .then((r) => r.json())
-        .then((data) => { setOrders(data.orders || []); setHasSearched(true); })
+        .then(async (data) => {
+          const raw = data.orders || [];
+          const enriched = await enrichWithLiveTracking(raw);
+          setOrders(enriched);
+          setHasSearched(true);
+        })
         .catch(() => setError("Network error. Please try again."))
         .finally(() => setIsLoading(false));
     }
@@ -253,7 +304,9 @@ export default function TrackOrderPage() {
       if (!res.ok) {
         setError(data.error || "Something went wrong. Please try again.");
       } else {
-        setOrders(data.orders || []);
+        const raw = data.orders || [];
+        const enriched = await enrichWithLiveTracking(raw);
+        setOrders(enriched);
         setHasSearched(true);
       }
     } catch {
