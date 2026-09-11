@@ -40,8 +40,10 @@ const STATUS_LABELS: Record<string, string> = {
   PENDING: "Order Placed",
   PROCESSING: "Payment Verified & Processing",
   PACKED: "Packed & Ready to Ship",
-  SHIPPED: "Out for Delivery",
+  SHIPPED: "Dispatched / In Transit",
+  OUT_FOR_DELIVERY: "Out for Delivery",
   DELIVERED: "Delivered",
+  ACTION_REQUIRED: "Courier Alert / Address Issue",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -49,7 +51,9 @@ const STATUS_COLORS: Record<string, string> = {
   PROCESSING: "bg-blue-100 text-blue-800 border-blue-200",
   PACKED: "bg-indigo-100 text-indigo-800 border-indigo-200",
   SHIPPED: "bg-purple-100 text-purple-800 border-purple-200",
+  OUT_FOR_DELIVERY: "bg-amber-100 text-amber-800 border-amber-200",
   DELIVERED: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  ACTION_REQUIRED: "bg-rose-100 text-rose-800 border-rose-200",
 };
 
 function formatPrice(paise: number) {
@@ -174,18 +178,56 @@ function OrderCard({ order }: { order: TrackedOrder }) {
         <div className="p-5 sm:p-6 pt-0 space-y-4 border-t border-gray-100">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Status Timeline</h3>
           <div className="relative pl-6 space-y-5 border-l-2 border-gray-200">
-            {(order.timeline || []).map((step, idx) => (
-              <div key={idx} className="relative">
-                <div className="absolute -left-[31px] top-0 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+            {(order.timeline || []).map((step, idx) => {
+              const isAlert =
+                step.status === "ACTION_REQUIRED" ||
+                (step.note &&
+                  (step.note.toLowerCase().includes("bad") ||
+                    step.note.toLowerCase().includes("incomplete")));
+
+              return (
+                <div key={idx} className="relative">
+                  <div
+                    className={`absolute -left-[31px] top-0 flex h-6 w-6 items-center justify-center rounded-full text-white ${
+                      isAlert
+                        ? "bg-rose-500 ring-4 ring-rose-100"
+                        : "bg-emerald-600"
+                    }`}
+                  >
+                    {isAlert ? (
+                      <AlertCircle className="h-3.5 w-3.5" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    )}
+                  </div>
+                  <div>
+                    <h4
+                      className={`text-sm font-bold ${
+                        isAlert ? "text-rose-700" : "text-gray-900"
+                      }`}
+                    >
+                      {isAlert
+                        ? "Attention Required / Address Issue"
+                        : STATUS_LABELS[step.status] || step.status}
+                    </h4>
+                    {step.note && (
+                      <p
+                        className={`text-xs mt-0.5 ${
+                          isAlert
+                            ? "text-rose-600 font-semibold"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        {step.note}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                      {formatDate(step.timestamp)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900">{STATUS_LABELS[step.status] || step.status}</h4>
-                  {step.note && <p className="text-xs text-gray-500">{step.note}</p>}
-                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{formatDate(step.timestamp)}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Shipping Address */}
@@ -241,7 +283,7 @@ export default function TrackOrderPage() {
             if (instruction.includes("delivered") || scanType === "dl") {
               scanStatus = "DELIVERED";
             } else if (instruction.includes("out for delivery") || scanType === "od") {
-              scanStatus = "SHIPPED";
+              scanStatus = "OUT_FOR_DELIVERY";
             } else if (
               instruction.includes("in transit") ||
               instruction.includes("reached") ||
@@ -250,10 +292,13 @@ export default function TrackOrderPage() {
             ) {
               scanStatus = "SHIPPED";
             } else if (
-              instruction.includes("manifest") ||
               instruction.includes("bad") ||
               instruction.includes("incomplete") ||
-              instruction.includes("address") ||
+              instruction.includes("address")
+            ) {
+              scanStatus = "ACTION_REQUIRED";
+            } else if (
+              instruction.includes("manifest") ||
               instruction.includes("pickup")
             ) {
               scanStatus = "PACKED";
@@ -277,7 +322,8 @@ export default function TrackOrderPage() {
           return {
             ...order,
             status: tracking.currentStage === "DELIVERED" ? "DELIVERED"
-              : tracking.currentStage === "OUT_FOR_DELIVERY" || tracking.currentStage === "SHIPPED" ? "SHIPPED"
+              : tracking.currentStage === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY"
+              : tracking.currentStage === "SHIPPED" ? "SHIPPED"
               : order.status,
             timeline: mergedTimeline,
             // Add expected delivery if available
