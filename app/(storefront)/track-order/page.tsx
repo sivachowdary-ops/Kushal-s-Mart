@@ -63,20 +63,16 @@ function formatPrice(paise: number) {
 function formatDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
-  // Format: "11 Sept 2026, 19:47 IST"
-  const datePart = d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
-  const timePart = d.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Kolkata",
-  });
-  return `${datePart}, ${timePart}`;
+  // Manually apply IST = UTC + 5h30m (robust across all environments)
+  const istMs = d.getTime() + (5 * 60 + 30) * 60 * 1000;
+  const ist = new Date(istMs);
+  const day = String(ist.getUTCDate()).padStart(2, "0");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const month = months[ist.getUTCMonth()];
+  const year = ist.getUTCFullYear();
+  const hh = String(ist.getUTCHours()).padStart(2, "0");
+  const mm = String(ist.getUTCMinutes()).padStart(2, "0");
+  return `${day} ${month} ${year}, ${hh}:${mm}`;
 }
 
 function OrderCard({ order }: { order: TrackedOrder }) {

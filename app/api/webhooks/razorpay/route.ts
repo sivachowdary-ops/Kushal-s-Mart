@@ -189,6 +189,8 @@ export async function POST(request: Request) {
           .eq("id", internalOrderId)
           .single();
 
+        console.log(`[Webhook] Delhivery trigger check — order: ${fullOrder?.orderNumber}, existingAwb: ${fullOrder?.shiprocketAwb || "none"}`);
+
         if (fullOrder && !fullOrder.shiprocketAwb) {
           const shippingAddr = (fullOrder.shippingAddress || {}) as {
             address?: string;
@@ -196,6 +198,9 @@ export async function POST(request: Request) {
             state?: string;
             pincode?: string;
           };
+
+          console.log(`[Webhook] Shipping address:`, JSON.stringify(shippingAddr));
+          console.log(`[Webhook] Customer: ${fullOrder.customerName}, Phone: ${fullOrder.customerPhone}`);
 
           const shipmentItems = (fullOrder.OrderItem || []).map(
             (oi: { productName: string; quantity: number; unitPrice: number }) => ({
@@ -223,6 +228,8 @@ export async function POST(request: Request) {
             paymentMode: "prepaid",
           });
 
+          console.log(`[Webhook] Delhivery result — success: ${result.success}, waybill: ${result.waybill || "none"}, error: ${result.error || "none"}`);
+
           if (result.success && result.waybill) {
             await supabaseAdmin
               .from("Order")
@@ -235,13 +242,15 @@ export async function POST(request: Request) {
               .eq("id", internalOrderId);
 
             console.log(
-              `[Razorpay Webhook] Delhivery shipment created: AWB ${result.waybill}`
+              `[Razorpay Webhook] ✅ Delhivery AWB created: ${result.waybill} for order ${fullOrder.orderNumber}`
             );
           } else {
             console.warn(
-              `[Razorpay Webhook] Delhivery shipment booking noted: ${result.error || "Awaiting admin manual dispatch"}`
+              `[Razorpay Webhook] ⚠️ Delhivery failed for ${fullOrder.orderNumber}: ${result.error || "No waybill returned"}`
             );
           }
+        } else if (fullOrder?.shiprocketAwb) {
+          console.log(`[Webhook] Skipping Delhivery — AWB already exists: ${fullOrder.shiprocketAwb}`);
         }
       } catch (shipErr) {
         // Delhivery failure must NEVER roll back the payment
