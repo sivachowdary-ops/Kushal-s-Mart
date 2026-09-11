@@ -272,68 +272,71 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </div>
 
             {/* Delhivery Express 1-Click Dispatch Card */}
-            <div className="bg-red-50/70 border border-red-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-black text-xs text-red-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Truck className="h-4 w-4" />
-                  <span>Delhivery.com Express B2C</span>
-                </span>
-                {order.shiprocket_awb && order.courier_name?.toLowerCase().includes("delhivery") && (
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                    Delhivery Active
-                  </span>
-                )}
-              </div>
-              
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Click below to instantly create shipment on Delhivery.com, generate live AWB, and create live tracking link without manual data entry.
-              </p>
-
-              {order.shiprocket_awb && (
-                <div className="bg-white p-3 rounded-xl border border-red-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-gray-500 font-medium">Courier: </span>
-                    <strong className="text-gray-900">{order.courier_name || "Delhivery Express"}</strong>
+            {(() => {
+              const hasValidAwb = Boolean(order.shiprocket_awb && !order.shiprocket_awb.startsWith("KM-") && order.shiprocket_awb !== order.order_number);
+              return (
+                <div className="bg-red-50/70 border border-red-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs text-red-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Truck className="h-4 w-4" />
+                      <span>Delhivery.com Express B2C</span>
+                    </span>
+                    {hasValidAwb && order.courier_name?.toLowerCase().includes("delhivery") && (
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                        Delhivery Active
+                      </span>
+                    )}
                   </div>
-                  <a
-                    href={`https://www.delhivery.com/track/package/${order.shiprocket_awb}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <span>Track on Delhivery.com ({order.shiprocket_awb})</span>
-                    <span>↗</span>
-                  </a>
-                </div>
-              )}
+                  
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Click below to instantly create shipment on Delhivery.com, generate live AWB, and create live tracking link without manual data entry.
+                  </p>
 
-              {delhiverySuccessMsg && (
-                <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                  {delhiverySuccessMsg}
-                </p>
-              )}
+                  {hasValidAwb && (
+                    <div className="bg-white p-3 rounded-xl border border-red-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="text-gray-500 font-medium">Courier: </span>
+                        <strong className="text-gray-900">{order.courier_name || "Delhivery Express"}</strong>
+                      </div>
+                      <a
+                        href={`https://www.delhivery.com/track/package/${order.shiprocket_awb}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <span>Track on Delhivery.com ({order.shiprocket_awb})</span>
+                        <span>↗</span>
+                      </a>
+                    </div>
+                  )}
 
-              {order.shiprocket_awb ? (
-                <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                  <a
-                    href={`https://www.delhivery.com/track/package/${order.shiprocket_awb}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
-                  >
-                    <span>Track Live on Delhivery.com</span>
-                    <span>↗</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={handleCancelDelhivery}
-                    disabled={isCancellingDelhivery}
-                    className="px-4 py-3 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    {isCancellingDelhivery ? "Cancelling..." : "Cancel Shipment"}
-                  </button>
-                </div>
-              ) : (
+                  {delhiverySuccessMsg && (
+                    <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                      {delhiverySuccessMsg}
+                    </p>
+                  )}
+
+                  {hasValidAwb ? (
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <a
+                        href={`https://www.delhivery.com/track/package/${order.shiprocket_awb}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+                      >
+                        <span>Track Live on Delhivery.com</span>
+                        <span>↗</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleCancelDelhivery}
+                        disabled={isCancellingDelhivery}
+                        className="px-4 py-3 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        {isCancellingDelhivery ? "Cancelling..." : "Cancel Shipment"}
+                      </button>
+                    </div>
+                  ) : (
                 <div className="space-y-2 pt-1">
                   {(order.payment_status === "PAID" || order.status === "PAID") && (
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
@@ -352,6 +355,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </div>
               )}
             </div>
+              );
+            })()}
 
             {/* Manual Shipping Override */}
             <div className="space-y-4 pt-2 border-t border-gray-100">

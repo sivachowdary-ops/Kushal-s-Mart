@@ -217,15 +217,19 @@ export async function createDelhiveryShipment(
     let waybill = "";
     if (json.packages && Array.isArray(json.packages) && json.packages.length > 0) {
       const pkg = json.packages[0];
-      waybill = pkg.waybill || pkg.refnum || "";
-      if (pkg.status === "Fail" || pkg.remarks) {
-        const failureRmk = Array.isArray(pkg.remarks) ? pkg.remarks.join(", ") : pkg.remarks;
-        if (!waybill) {
-          throw new Error(failureRmk || "Delhivery rejected shipment creation");
-        }
+      if (pkg.status === "Fail") {
+        const failureRmk = Array.isArray(pkg.remarks) ? pkg.remarks.join(", ") : (pkg.remarks || "Delhivery rejected shipment creation");
+        throw new Error(failureRmk);
       }
-    } else if (json.upload_wbn) {
-      waybill = json.upload_wbn;
+      waybill = (pkg.waybill || "").trim();
+    }
+    if (!waybill && json.upload_wbn) {
+      waybill = String(json.upload_wbn).trim();
+    }
+
+    // AWB must never be the order number
+    if (waybill && (waybill === data.orderNumber || waybill.startsWith("KM-"))) {
+      waybill = "";
     }
 
     if (waybill) {
@@ -283,13 +287,13 @@ export async function getDelhiveryTrackingStatus(
   waybill: string
 ): Promise<DelhiveryTrackingResult> {
   const cleanAwb = waybill?.trim();
-  if (!cleanAwb) {
+  if (!cleanAwb || cleanAwb.startsWith("KM-")) {
     return {
       success: false,
       waybill: "",
       currentStatus: "UNKNOWN",
-      currentStage: "ORDER_PLACED",
-      error: "Waybill number is required",
+      currentStage: "PACKED",
+      error: "Invalid or missing Delhivery waybill number",
       scans: [],
     };
   }
@@ -380,8 +384,8 @@ export async function getDelhiveryTrackingStatus(
     return {
       success: false,
       waybill: cleanAwb,
-      currentStatus: "IN_TRANSIT",
-      currentStage: "SHIPPED",
+      currentStatus: "UNKNOWN",
+      currentStage: "PACKED",
       error: msg,
       scans: [],
     };

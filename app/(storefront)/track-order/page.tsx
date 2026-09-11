@@ -125,12 +125,12 @@ function OrderCard({ order }: { order: TrackedOrder }) {
         </div>
 
         {/* AWB / Courier */}
-        {order.shiprocket_awb && (
+        {order.shiprocket_awb && !order.shiprocket_awb.startsWith("KM-") && order.shiprocket_awb !== order.order_number && (
           <div className="mt-4 bg-gray-50 rounded-2xl p-3 border border-gray-200/60 flex items-center gap-3 text-xs">
             <Truck className="h-4 w-4 text-red-600 shrink-0" />
             <div>
               <span className="font-bold text-gray-400 uppercase text-[10px] block">Courier & AWB</span>
-              <span className="font-bold text-gray-900">{order.courier_name || "Shiprocket Express"} — {order.shiprocket_awb}</span>
+              <span className="font-bold text-gray-900">{order.courier_name || "Delhivery Express"} — {order.shiprocket_awb}</span>
             </div>
           </div>
         )}
@@ -263,15 +263,20 @@ export default function TrackOrderPage() {
   const enrichWithLiveTracking = async (rawOrders: TrackedOrder[]): Promise<TrackedOrder[]> => {
     const enriched = await Promise.all(
       rawOrders.map(async (order) => {
-        // Only fetch live tracking for orders with AWB that aren't delivered/cancelled
-        if (!order.shiprocket_awb || ["DELIVERED", "CANCELLED", "COMPLETED"].includes(order.status)) {
+        // Only fetch live tracking for orders with actual AWB (not KM- order numbers) that aren't delivered/cancelled
+        if (
+          !order.shiprocket_awb ||
+          order.shiprocket_awb.startsWith("KM-") ||
+          order.shiprocket_awb === order.order_number ||
+          ["DELIVERED", "CANCELLED", "COMPLETED"].includes(order.status)
+        ) {
           return order;
         }
         try {
           const res = await fetch(`/api/orders/${order.order_number}/tracking`);
           if (!res.ok) return order;
           const tracking = await res.json();
-          if (!tracking.hasTracking) return order;
+          if (!tracking.hasTracking || !tracking.success) return order;
 
           // Merge live Delhivery scans into the timeline
           const liveScans = (tracking.scans || []).map((s: { scanType: string; scanDateTime: string; scannedLocation: string; instructions: string }) => {
@@ -319,11 +324,15 @@ export default function TrackOrderPage() {
               )
             : baseTimeline;
 
+          const shouldUpdateStatus = Boolean(tracking.success && tracking.hasTracking && tracking.scans && tracking.scans.length > 0);
+
           return {
             ...order,
-            status: tracking.currentStage === "DELIVERED" ? "DELIVERED"
-              : tracking.currentStage === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY"
-              : tracking.currentStage === "SHIPPED" ? "SHIPPED"
+            status: shouldUpdateStatus
+              ? (tracking.currentStage === "DELIVERED" ? "DELIVERED"
+                  : tracking.currentStage === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY"
+                  : tracking.currentStage === "SHIPPED" ? "SHIPPED"
+                  : order.status)
               : order.status,
             timeline: mergedTimeline,
             // Add expected delivery if available

@@ -15,7 +15,9 @@ export async function GET(
       .single();
 
     if (error || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    if (!order.shiprocketAwb) return NextResponse.json({ hasTracking: false, message: "No shipment yet" });
+    if (!order.shiprocketAwb || order.shiprocketAwb.startsWith("KM-") || order.shiprocketAwb === order.orderNumber) {
+      return NextResponse.json({ hasTracking: false, message: "No active shipment AWB yet" });
+    }
 
     const tracking = await getDelhiveryTrackingStatus(order.shiprocketAwb);
 
@@ -30,7 +32,8 @@ export async function GET(
     }
 
     return NextResponse.json({
-      hasTracking: true,
+      success: tracking.success,
+      hasTracking: tracking.success && (tracking.scans?.length > 0 || (tracking.currentStatus !== "UNKNOWN" && tracking.currentStatus !== "")),
       awb: order.shiprocketAwb,
       courierName: order.courierName || "Delhivery Express",
       currentStatus: tracking.currentStatus,

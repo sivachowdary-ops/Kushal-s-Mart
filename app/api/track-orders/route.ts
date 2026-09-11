@@ -71,6 +71,9 @@ export async function GET(request: Request) {
     const createdAt = (o.createdAt as string) || new Date().toISOString();
     const updatedAt = (o.updatedAt as string) || createdAt;
 
+    const rawAwb = (o.shiprocketAwb as string) || "";
+    const cleanAwb = rawAwb && !rawAwb.startsWith("KM-") && rawAwb !== o.orderNumber ? rawAwb : null;
+
     const timeline: { status: string; timestamp: string; note?: string }[] = [
       { status: "PENDING", timestamp: createdAt, note: "Order placed successfully" },
     ];
@@ -81,7 +84,7 @@ export async function GET(request: Request) {
       timeline.push({ status: "PACKED", timestamp: updatedAt, note: "Items packed securely with quality check" });
     }
     if (currentIdx >= 3) {
-      timeline.push({ status: "SHIPPED", timestamp: updatedAt, note: `Dispatched with ${o.courierName || "Express Courier"} (AWB: ${o.shiprocketAwb || "Assigned"})` });
+      timeline.push({ status: "SHIPPED", timestamp: updatedAt, note: `Dispatched with ${o.courierName || "Express Courier"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}` });
     }
     if (currentIdx >= 4) {
       timeline.push({ status: "DELIVERED", timestamp: updatedAt, note: "Package handed over to recipient" });
@@ -98,9 +101,9 @@ export async function GET(request: Request) {
       payment_status: o.paymentStatus,
       payment_mode: o.paymentMode,
       courier_name: o.courierName,
-      shiprocket_awb: o.shiprocketAwb,
-      tracking_awb: o.shiprocketAwb,
-      tracking_url: o.shiprocketAwb ? `https://www.delhivery.com/track/package/${o.shiprocketAwb}` : null,
+      shiprocket_awb: cleanAwb,
+      tracking_awb: cleanAwb,
+      tracking_url: cleanAwb ? `https://www.delhivery.com/track/package/${cleanAwb}` : null,
       created_at: createdAt,
       timeline,
       items: rawItems,

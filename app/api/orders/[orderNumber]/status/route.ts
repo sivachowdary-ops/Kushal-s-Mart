@@ -27,12 +27,14 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    const awb = data.shiprocketAwb && !data.shiprocketAwb.startsWith("KM-") && data.shiprocketAwb !== data.orderNumber ? data.shiprocketAwb : null;
+
     return NextResponse.json({
       status: data.status,
       paymentStatus: data.paymentStatus,
       orderNumber: data.orderNumber,
-      shiprocketAwb: data.shiprocketAwb || null,
-      courierName: data.courierName || null,
+      shiprocketAwb: awb,
+      courierName: awb ? (data.courierName || "Delhivery Express") : null,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to fetch order status";
