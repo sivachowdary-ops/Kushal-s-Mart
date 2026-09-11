@@ -61,15 +61,22 @@ function formatPrice(paise: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
+  if (!iso) return "";
+  const d = new Date(iso);
+  // Format: "11 Sept 2026, 19:47 IST"
+  const datePart = d.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+  const timePart = d.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone: "Asia/Kolkata",
   });
+  return `${datePart}, ${timePart}`;
 }
 
 function OrderCard({ order }: { order: TrackedOrder }) {

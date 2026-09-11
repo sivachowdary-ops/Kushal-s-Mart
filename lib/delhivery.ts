@@ -213,26 +213,45 @@ export async function createDelhiveryShipment(
 
     const json = await res.json().catch(() => ({}));
 
+    // Debug: log the full Delhivery response so we can see it in Vercel logs
+    console.log(`[Delhivery Create] Order ${data.orderNumber} — raw response:`, JSON.stringify(json).slice(0, 800));
+
     // Check for success waybill in Delhivery's various response formats
     let waybill = "";
     if (json.packages && Array.isArray(json.packages) && json.packages.length > 0) {
       const pkg = json.packages[0];
-      if (pkg.status === "Fail") {
+      console.log(`[Delhivery Create] Package[0]:`, JSON.stringify(pkg).slice(0, 400));
+      
+      // waybill = actual AWB from Delhivery
+      // refnum = seller's reference (could be our order number or a short Delhivery ref)
+      waybill = (pkg.waybill || "").trim();
+
+      // If waybill is empty, try refnum — but ONLY if it doesn't look like our order number
+      if (!waybill && pkg.refnum) {
+        const refnum = String(pkg.refnum).trim();
+        if (!refnum.startsWith("KM-") && refnum !== data.orderNumber) {
+          waybill = refnum;
+        }
+      }
+
+      if (pkg.status === "Fail" && !waybill) {
         const failureRmk = Array.isArray(pkg.remarks) ? pkg.remarks.join(", ") : (pkg.remarks || "Delhivery rejected shipment creation");
         throw new Error(failureRmk);
       }
-      waybill = (pkg.waybill || "").trim();
     }
+
     if (!waybill && json.upload_wbn) {
       waybill = String(json.upload_wbn).trim();
     }
 
-    // AWB must never be the order number
+    // AWB must never be the order number itself
     if (waybill && (waybill === data.orderNumber || waybill.startsWith("KM-"))) {
+      console.warn(`[Delhivery Create] Discarded fake AWB (order number returned as AWB): ${waybill}`);
       waybill = "";
     }
 
     if (waybill) {
+      console.log(`[Delhivery Create] ✅ AWB generated for ${data.orderNumber}: ${waybill}`);
       await logShipmentAttempt({
         orderId: data.orderId,
         orderNumber: data.orderNumber,
@@ -251,7 +270,8 @@ export async function createDelhiveryShipment(
       };
     }
 
-    const errMsg = json.error || json.rmk || "Delhivery API did not return an active waybill.";
+    const errMsg = json.error || json.rmk || json.message || "Delhivery API did not return an active waybill.";
+    console.error(`[Delhivery Create] ❌ No AWB in response for ${data.orderNumber}. Error: ${errMsg}`);
     throw new Error(errMsg);
 
   } catch (apiErr: unknown) {
