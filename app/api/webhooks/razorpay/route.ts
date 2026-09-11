@@ -25,10 +25,16 @@ export async function POST(request: Request) {
     // ── 2. Read signature header ────────────────────────────────────────────
     const signature = request.headers.get("x-razorpay-signature") || "";
 
+    // ── Debug logging (remove after confirming webhook works) ────────────────
+    console.log("[Razorpay Webhook] Received — body length:", rawBody.length,
+      "| has signature:", !!signature,
+      "| secret configured:", !!process.env.RAZORPAY_WEBHOOK_SECRET);
+
     // ── 3. Verify webhook signature ─────────────────────────────────────────
     if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
-      console.warn("[Razorpay Webhook] Invalid signature — rejecting");
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+      console.warn("[Razorpay Webhook] Invalid signature — secret mismatch or missing RAZORPAY_WEBHOOK_SECRET env var");
+      // Return 200 so Razorpay doesn't keep retrying — log will show the issue
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 200 });
     }
 
     // ── 4. Parse verified body ──────────────────────────────────────────────
