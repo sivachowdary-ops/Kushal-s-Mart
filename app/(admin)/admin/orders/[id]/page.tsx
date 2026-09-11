@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useAdminStore } from "@/lib/admin-store";
+import { supabase } from "@/lib/supabase-client";
 import Link from "next/link";
 import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw } from "lucide-react";
 
@@ -46,7 +47,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsDispatchingDelhivery(true);
     setDelhiverySuccessMsg(null);
     try {
-      const token = localStorage.getItem("admin_token") || "";
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+      if (!token) { alert("Admin session expired. Please log in again."); setIsDispatchingDelhivery(false); return; }
       const res = await fetch(`/api/admin/orders/${order.id}/delhivery`, {
         method: "POST",
         headers: {
@@ -76,7 +79,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsCancellingDelhivery(true);
     setDelhiverySuccessMsg(null);
     try {
-      const token = localStorage.getItem("admin_token") || "";
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+      if (!token) { alert("Admin session expired. Please log in again."); setIsCancellingDelhivery(false); return; }
       const res = await fetch(`/api/admin/orders/${order.id}/delhivery/cancel`, {
         method: "POST",
         headers: {
@@ -140,7 +145,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setIsRefunding(true);
     setRefundMessage(null);
     try {
-      const token = localStorage.getItem("admin_token") || "";
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+      if (!token) { setRefundMessage({ type: "error", text: "Admin session expired. Please log in again." }); setIsRefunding(false); return; }
       const res = await fetch(`/api/admin/orders/${order.id}/refund`, {
         method: "POST",
         headers: {
