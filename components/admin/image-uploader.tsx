@@ -192,6 +192,56 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
     }
   }, [slots, maxImages, folder, syncUrls]);
 
+  // Global Ctrl+V clipboard paste support for screenshots, copied images, and image URLs
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles: File[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split("/")[1] || "png";
+            const namedFile = new File([file], `paste-${Date.now()}-${i}.${ext}`, {
+              type: file.type,
+            });
+            imageFiles.push(namedFile);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        handleFiles(imageFiles);
+        return;
+      }
+
+      // Check if text is a direct image URL (only if not focused on another input)
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag !== "input" && activeTag !== "textarea") {
+        const text = e.clipboardData?.getData("text")?.trim();
+        if (text && /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif)(\?.*)?$/i.test(text)) {
+          e.preventDefault();
+          setSlots((prev) => {
+            if (prev.some((s) => s.url === text)) return prev;
+            const updated = [...prev, { url: text, preview: text, uploading: false, error: null }];
+            pendingSyncRef.current = updated;
+            return updated;
+          });
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [handleFiles]);
+
   const removeSlot = useCallback(async (idx: number) => {
     const slot = slots[idx];
     if (slot.url) {
@@ -261,9 +311,9 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
             <ImageIcon className="h-6 w-6 text-gray-400" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-bold text-gray-700">Drag &amp; drop images here</p>
-            <p className="text-xs text-gray-400 mt-0.5">or click to browse · JPG, PNG, WEBP · max 10MB each</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1">Auto-converted to WebP for fast loading</p>
+            <p className="text-sm font-bold text-gray-700">Drag &amp; drop images or press Ctrl+V to paste</p>
+            <p className="text-xs text-gray-400 mt-0.5">paste screenshots · click to browse · JPG, PNG, WEBP</p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-1">Direct upload to Cloudinary (WebP optimized)</p>
           </div>
         </div>
       )}
