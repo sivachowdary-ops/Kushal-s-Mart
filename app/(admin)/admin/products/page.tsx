@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAdminStore } from "@/lib/admin-store";
 import Link from "next/link";
-import { Plus, Search, Edit, Trash2, Tag, AlertCircle } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Tag, AlertCircle, Cloud } from "lucide-react";
+import { supabase } from "@/lib/supabase-client";
 
 export default function ProductsPage() {
   const { products, categories, subcategories, isLoading, error, refreshProducts, deleteProduct } = useAdminStore();
@@ -11,6 +12,31 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [subcategoryFilter, setSubcategoryFilter] = useState("ALL");
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  const handleMigrateImages = async () => {
+    if (!confirm("This will copy all existing product images from Supabase Storage to Cloudinary and update database URLs. Proceed?")) return;
+    setIsMigrating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || localStorage.getItem("admin_token") || "";
+      const res = await fetch("/api/admin/migrate-images", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Success! ${data.uniqueImagesMigrated} images migrated to Cloudinary!`);
+        await refreshProducts();
+      } else {
+        alert(data.error || "Migration failed");
+      }
+    } catch {
+      alert("Failed to connect to migration service");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   useEffect(() => {
     refreshProducts();
@@ -46,13 +72,24 @@ export default function ProductsPage() {
     <div className="space-y-6 bg-[#F4F5F7] min-h-screen p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-slate-900">Products</h1>
-        <Link
-          href="/admin/products/new"
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Product
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleMigrateImages}
+            disabled={isMigrating}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+            title="Copy existing product images from Supabase Storage to Cloudinary"
+          >
+            <Cloud className="h-4 w-4 text-sky-500" />
+            <span>{isMigrating ? "Syncing to Cloudinary..." : "Sync Images to Cloudinary"}</span>
+          </button>
+          <Link
+            href="/admin/products/new"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Product
+          </Link>
+        </div>
       </div>
 
       {error && (
