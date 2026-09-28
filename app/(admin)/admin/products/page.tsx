@@ -13,28 +13,59 @@ export default function ProductsPage() {
   const [subcategoryFilter, setSubcategoryFilter] = useState("ALL");
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
 
   const handleMigrateImages = async () => {
     if (!confirm("This will copy all existing product images from Supabase Storage to Cloudinary and update database URLs. Proceed?")) return;
     setIsMigrating(true);
+    setMigrationStatus("Starting...");
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || localStorage.getItem("admin_token") || "";
-      const res = await fetch("/api/admin/migrate-images", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert(`Success! ${data.uniqueImagesMigrated} images migrated to Cloudinary!`);
-        await refreshProducts();
-      } else {
-        alert(data.error || "Migration failed");
+      let isDone = false;
+      let totalMigrated = 0;
+      let iteration = 0;
+
+      while (!isDone && iteration < 30) {
+        iteration++;
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || localStorage.getItem("admin_token") || "";
+
+        const res = await fetch("/api/admin/migrate-images", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = `HTTP ${res.status}`;
+          try {
+            const parsed = JSON.parse(errText);
+            msg = parsed.error || msg;
+          } catch {}
+          alert(`Migration error: ${msg}`);
+          setIsMigrating(false);
+          setMigrationStatus(null);
+          return;
+        }
+
+        const data = await res.json();
+        totalMigrated += data.imagesUploaded || 0;
+
+        if (data.done || data.remainingProducts === 0) {
+          isDone = true;
+          setMigrationStatus(null);
+          alert(`Complete! All product images migrated to Cloudinary! (${totalMigrated} images processed)`);
+          await refreshProducts();
+        } else {
+          setMigrationStatus(`Migrating (${data.remainingProducts} remaining)...`);
+        }
       }
-    } catch {
-      alert("Failed to connect to migration service");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      alert(`Could not connect to migration service: ${msg}`);
     } finally {
       setIsMigrating(false);
+      setMigrationStatus(null);
     }
   };
 
@@ -80,7 +111,7 @@ export default function ProductsPage() {
             title="Copy existing product images from Supabase Storage to Cloudinary"
           >
             <Cloud className="h-4 w-4 text-sky-500" />
-            <span>{isMigrating ? "Syncing to Cloudinary..." : "Sync Images to Cloudinary"}</span>
+            <span>{isMigrating ? (migrationStatus || "Syncing...") : "Sync Images to Cloudinary"}</span>
           </button>
           <Link
             href="/admin/products/new"

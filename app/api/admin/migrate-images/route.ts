@@ -3,13 +3,13 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { verifyAdmin } from "@/lib/admin-auth";
 
-export const maxDuration = 60; // Allow up to 60 seconds on Vercel
+export const maxDuration = 60;
 
 /**
  * POST /api/admin/migrate-images
  *
- * Migrates existing product and variant images from Supabase Storage to Cloudinary.
- * Runs directly on Vercel using the live environment variables.
+ * Migrates a batch of products/variants from Supabase Storage to Cloudinary.
+ * Processes 3 products per call to avoid Vercel serverless execution timeouts.
  */
 export async function POST(request: NextRequest) {
   const admin = await verifyAdmin(request);
@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
 
   if (!cloudName || !apiKey || !apiSecret) {
     return NextResponse.json(
-      { error: "Cloudinary environment variables are missing on Vercel." },
+      { error: "Cloudinary keys missing. Please verify CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in Vercel settings." },
       { status: 500 }
     );
   }
 
   const urlMap = new Map<string, string>();
-  let totalProcessed = 0;
-  let errors: string[] = [];
+  let totalUploaded = 0;
+  const errors: string[] = [];
 
   async function migrateUrl(sourceUrl: string, folder = "products"): Promise<string> {
     if (urlMap.has(sourceUrl)) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
       const uploaded = await uploadToCloudinary(buffer, folder);
       urlMap.set(sourceUrl, uploaded.url);
-      totalProcessed++;
+      totalUploaded++;
       return uploaded.url;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Upload error";
@@ -55,76 +55,91 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 1. Migrate Products
-    const { data: products } = await supabaseAdmin
+    // 1. Find all products with Supabase storage images
+    const { data: allProducts, error: prodErr } = await supabaseAdmin
       .from("Product")
       .select("id, name, images");
 
-    if (products) {
-      for (const prod of products) {
-        const images = Array.isArray(prod.images) ? (prod.images as string[]) : [];
-        let changed = false;
-        const newImages: string[] = [];
+    if (prodErr) throw new Error(prodErr.message);
 
-        for (const img of images) {
-          if (typeof img === "string" && img.includes("supabase.co/storage")) {
-            const cdnUrl = await migrateUrl(img, "products");
-            newImages.push(cdnUrl);
-            if (cdnUrl !== img) changed = true;
-          } else {
-            newImages.push(img);
-          }
+    const pendingProducts = (allProducts || []).filter((p) =>
+      Array.isArray(p.images) &&
+      p.images.some((img: string) => typeof img === "string" && img.includes("supabase.co/storage"))
+    );
+
+    // Process a batch of up to 3 products
+    const batch = pendingProducts.slice(0, 3);
+
+    for (const prod of batch) {
+      const images = Array.isArray(prod.images) ? (prod.images as string[]) : [];
+      const newImages: string[] = [];
+      let changed = false;
+
+      for (const img of images) {
+        if (typeof img === "string" && img.includes("supabase.co/storage")) {
+          const cdnUrl = await migrateUrl(img, "products");
+          newImages.push(cdnUrl);
+          if (cdnUrl !== img) changed = true;
+        } else {
+          newImages.push(img);
         }
+      }
 
-        if (changed) {
-          await supabaseAdmin
-            .from("Product")
-            .update({ images: newImages })
-            .eq("id", prod.id);
+      if (changed) {
+        await supabaseAdmin
+          .from("Product")
+          .update({ images: newImages })
+          .eq("id", prod.id);
+      }
+    }
+
+    // 2. Also check variants for those migrated products
+    for (const prod of batch) {
+      const { data: variants } = await supabaseAdmin
+        .from("ProductVariant")
+        .select("id, name, images")
+        .eq("productId", prod.id);
+
+      if (variants) {
+        for (const v of variants) {
+          const vImages = Array.isArray(v.images) ? (v.images as string[]) : [];
+          const newVImages: string[] = [];
+          let changed = false;
+
+          for (const img of vImages) {
+            if (typeof img === "string" && img.includes("supabase.co/storage")) {
+              const cdnUrl = await migrateUrl(img, "products");
+              newVImages.push(cdnUrl);
+              if (cdnUrl !== img) changed = true;
+            } else {
+              newVImages.push(img);
+            }
+          }
+
+          if (changed) {
+            await supabaseAdmin
+              .from("ProductVariant")
+              .update({ images: newVImages })
+              .eq("id", v.id);
+          }
         }
       }
     }
 
-    // 2. Migrate Variants
-    const { data: variants } = await supabaseAdmin
-      .from("ProductVariant")
-      .select("id, name, images");
-
-    if (variants) {
-      for (const v of variants) {
-        const images = Array.isArray(v.images) ? (v.images as string[]) : [];
-        let changed = false;
-        const newImages: string[] = [];
-
-        for (const img of images) {
-          if (typeof img === "string" && img.includes("supabase.co/storage")) {
-            const cdnUrl = await migrateUrl(img, "products");
-            newImages.push(cdnUrl);
-            if (cdnUrl !== img) changed = true;
-          } else {
-            newImages.push(img);
-          }
-        }
-
-        if (changed) {
-          await supabaseAdmin
-            .from("ProductVariant")
-            .update({ images: newImages })
-            .eq("id", v.id);
-        }
-      }
-    }
+    const remainingCount = pendingProducts.length - batch.length;
 
     return NextResponse.json({
       success: true,
-      message: `Successfully migrated ${urlMap.size} unique images to Cloudinary!`,
-      uniqueImagesMigrated: urlMap.size,
-      totalInstancesUpdated: totalProcessed,
+      batchMigrated: batch.length,
+      imagesUploaded: totalUploaded,
+      remainingProducts: Math.max(0, remainingCount),
+      done: remainingCount <= 0,
       errors: errors.length > 0 ? errors : undefined,
     });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Migration failed";
+    console.error("[migrate-images] Error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
