@@ -71,12 +71,19 @@ async function uploadToR2(file: File, folder: string): Promise<string> {
 
 // Delete an image by its key (extracted from URL)
 async function deleteFromR2(url: string) {
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
-  const key = publicUrl && url.startsWith(publicUrl) 
-    ? url.replace(publicUrl + "/", "") 
-    : url.includes("/products/")
-    ? url.split("/products/").pop() ? `products/${url.split("/products/").pop()}` : ""
-    : "";
+  let key = "";
+
+  if (url.includes("res.cloudinary.com")) {
+    // Cloudinary URL: extract public_id
+    // e.g. https://res.cloudinary.com/abc/image/upload/v123/kushals-mart/products/foo.webp
+    const match = url.match(/\/upload\/(?:v\d+\/)?(kushals-mart\/.+)\.\w+$/);
+    key = match ? match[1] : "";
+  } else if (url.includes("/products/")) {
+    // Legacy Supabase/R2 URL fallback
+    const tail = url.split("/products/").pop();
+    key = tail ? `products/${tail}` : "";
+  }
+
   if (!key) return;
 
   const headers: Record<string, string> = {};

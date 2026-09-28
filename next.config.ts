@@ -14,8 +14,8 @@ const securityHeaders = [
       // Razorpay checkout JS + frame
       "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
       "frame-src 'self' https://api.razorpay.com",
-      // Supabase storage for product images; Delhivery tracking redirect
-      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.com https://r2.cloudflare.com",
+      // Supabase storage (legacy images) + Cloudinary CDN (new images)
+      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.com https://res.cloudinary.com",
       "connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.razorpay.com https://lapi.razorpay.com https://track.delhivery.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",

@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { uploadToCloudinary, deleteFromCloudinary, extractCloudinaryPublicId } from "@/lib/cloudinary";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
-
-// Cloudflare R2 client (S3-compatible)
-function getR2Client() {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-
-  if (!accountId || !accessKeyId || !secretAccessKey || accountId === "YOUR_ACCOUNT_ID") {
-    return null;
-  }
-
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId, secretAccessKey },
-  });
-}
 
 // POST /api/admin/upload — upload one image, returns { url, key }
 export async function POST(request: NextRequest) {
@@ -60,48 +42,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
     }
 
-    // Generate unique filename — always save as .webp (browser sent us pre-converted WebP)
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).slice(2, 8);
-    const key = `${folder}/${timestamp}-${random}.webp`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const r2 = getR2Client();
-    const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+    // Upload to Cloudinary
+    const result = await uploadToCloudinary(buffer, folder);
 
-    // Use R2 if configured with non-placeholder credentials
-    if (r2 && publicUrl && !publicUrl.includes("XXXX")) {
-      const bucketName = process.env.R2_BUCKET_NAME || "kushals-mart-products";
-      await r2.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: buffer,
-          ContentType: "image/webp",
-          CacheControl: "public, max-age=31536000, immutable",
-        })
-      );
-      const imageUrl = `${publicUrl}/${key}`;
-      return NextResponse.json({ url: imageUrl, key });
-    }
-
-    // Fallback: Upload to Supabase Storage in 'products' bucket
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("products")
-      .upload(key, buffer, {
-        contentType: "image/webp",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
-    }
-
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from("products")
-      .getPublicUrl(key);
-
-    return NextResponse.json({ url: publicUrlData.publicUrl, key });
+    return NextResponse.json({
+      url: result.url,
+      key: result.publicId,
+    });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Upload failed";
@@ -110,7 +59,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/admin/upload?key=products/xxx.webp — delete an image
+// DELETE /api/admin/upload?key=... — delete an image
 export async function DELETE(request: NextRequest) {
   const admin = await verifyAdmin(request);
   if (!admin) {
@@ -123,17 +72,15 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const r2 = getR2Client();
-    const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+    // key can be a Cloudinary public_id directly, or a full URL
+    const publicId = key.includes("res.cloudinary.com")
+      ? extractCloudinaryPublicId(key)
+      : key;
 
-    if (r2 && publicUrl && !publicUrl.includes("XXXX")) {
-      const bucketName = process.env.R2_BUCKET_NAME || "kushals-mart-products";
-      await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
-      return NextResponse.json({ success: true });
+    if (publicId) {
+      await deleteFromCloudinary(publicId);
     }
 
-    // Delete from Supabase storage
-    await supabaseAdmin.storage.from("products").remove([key]);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Delete failed";
