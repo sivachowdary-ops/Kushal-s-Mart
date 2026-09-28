@@ -13,16 +13,18 @@ export default function NewProductPage() {
   const { categories, subcategories, addProduct, isLoading } = useAdminStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Form states
+  // Form states — with smart prefilled defaults
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(
+    "High quality premium model designed for enthusiasts and collectors. Built with durable materials, high-precision detailing, and smooth performance. Perfect for gifting, display, or thrilling action."
+  );
   const [categoryId, setCategoryId] = useState("");
   const [subCategoryId, setSubCategoryId] = useState("");
-  const [brand, setBrand] = useState("");
-  const [mrp, setMrp] = useState("");
-  const [sellingPrice, setSellingPrice] = useState("");
-  const [costPrice, setCostPrice] = useState("");
+  const [brand, setBrand] = useState("Kushal's Mart");
+  const [mrp, setMrp] = useState("999");
+  const [sellingPrice, setSellingPrice] = useState("699");
+  const [costPrice, setCostPrice] = useState("450");
   const [isActive, setIsActive] = useState(true);
   
   // Dimensions & Weight — standard approved defaults (500g, 20x20x20cm), editable by admin
@@ -49,20 +51,40 @@ export default function NewProductPage() {
   const [badgeType, setBadgeType] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
   
-  // Array states
-  const [whatsInTheBox, setWhatsInTheBox] = useState<string[]>([""]);
-  const [specifications, setSpecifications] = useState<{key: string, value: string}[]>([{key: "", value: ""}]);
+  // Array states — prefilled with standard e-commerce values
+  const [whatsInTheBox, setWhatsInTheBox] = useState<string[]>([
+    "1x Main Model Unit",
+    "1x Remote Controller / Accessories",
+    "1x User Manual & Quick Start Guide",
+  ]);
+  const [specifications, setSpecifications] = useState<{key: string, value: string}[]>([
+    { key: "Material", value: "High Grade Alloy & ABS Plastic" },
+    { key: "Recommended Age", value: "6+ Years" },
+    { key: "Package Weight", value: "500g" },
+    { key: "Quality Check", value: "100% Tested & Verified" },
+  ]);
   const [variants, setVariants] = useState<Partial<AdminVariant>[]>([
-    { name: "Default", sku: "", stock: 0, selling_price_override: null, mrp_override: null, low_stock_threshold: 5 }
+    { name: "Standard", sku: "KM-101", stock: 10, selling_price_override: null, mrp_override: null, low_stock_threshold: 3 }
   ]);
   const [isSaved, setIsSaved] = useState(false);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
     setName(newName);
+    const generatedSlug = newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     if (!slug || slug === name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) {
-      setSlug(newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+      setSlug(generatedSlug);
     }
+    // Auto-update first variant SKU if empty or generic
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i === 0 && (!v.sku || v.sku === "KM-101")) {
+          const shortCode = generatedSlug.slice(0, 10).toUpperCase().replace(/-/g, "");
+          return { ...v, sku: shortCode ? `KM-${shortCode}` : "KM-101" };
+        }
+        return v;
+      })
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

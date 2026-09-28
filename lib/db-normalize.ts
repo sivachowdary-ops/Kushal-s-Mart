@@ -136,7 +136,7 @@ export function toProductDB(body: Record<string, unknown>) {
     id: (body.id as string) || `prod-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
     name: body.name,
     slug: body.slug,
-    description: body.description || "",
+    description: (body.description as string)?.trim() || "High quality premium model designed for enthusiasts and collectors. Built with durable materials, high-precision detailing, and smooth performance. Perfect for gifting, display, or thrilling action.",
     categoryId: body.category_id,
     brand: body.brand || null,
     mrp: body.mrp,
