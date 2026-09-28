@@ -20,6 +20,8 @@ export async function uploadToCloudinary(
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: `kushals-mart/${folder}`,
+        asset_folder: `kushals-mart/${folder}`,
+        use_asset_folder_as_public_id_prefix: true,
         format: "webp",
         quality: "auto",
         resource_type: "image",
