@@ -58,8 +58,9 @@ async function uploadToR2(file: File, folder: string): Promise<string> {
   const headers: Record<string, string> = {};
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
+    const token = session?.access_token || (typeof window !== "undefined" ? localStorage.getItem("admin_token") : "") || "";
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
   } catch {}
 
@@ -111,6 +112,13 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
   );
   const [isDragging, setIsDragging] = useState(false);
   const dragIndex = useRef<number | null>(null);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
+
+  // Keep a live reference to slots so handleFiles never reads stale values
+  const slotsRef = useRef<ImageSlot[]>(slots);
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
 
   // Synchronize slots when value is populated asynchronously from DB
   useEffect(() => {
@@ -148,8 +156,11 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
   });
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
-    const fileArray = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    const remaining = maxImages - slots.filter((s) => !s.error).length;
+    const fileArray = Array.from(files).filter((f) =>
+      f.type.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif|avif|bmp|tiff)$/i.test(f.name)
+    );
+    const currentSlots = slotsRef.current;
+    const remaining = maxImages - currentSlots.filter((s) => !s.error).length;
     const toProcess = fileArray.slice(0, Math.max(0, remaining));
 
     if (!toProcess.length) return;
@@ -190,42 +201,101 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
         );
       }
     }
-  }, [slots, maxImages, folder, syncUrls]);
+  }, [maxImages, folder]);
 
-  // Global Ctrl+V clipboard paste support for screenshots, copied images, and image URLs
+  const handleFilesRef = useRef(handleFiles);
   useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
+    handleFilesRef.current = handleFiles;
+  }, [handleFiles]);
 
-      const imageFiles: File[] = [];
+  // Permanent global Ctrl+V clipboard paste listener for images, files, HTML tags, and URLs
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const clipboardData = e.clipboardData;
+      if (!clipboardData) return;
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) {
-            const ext = file.type.split("/")[1] || "png";
-            const namedFile = new File([file], `paste-${Date.now()}-${i}.${ext}`, {
-              type: file.type,
-            });
-            imageFiles.push(namedFile);
+      const foundFiles: File[] = [];
+
+      // 1. Direct files from clipboard (e.g. copied from Windows Explorer, desktop, or screenshot tool)
+      if (clipboardData.files && clipboardData.files.length > 0) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+          const file = clipboardData.files[i];
+          if (file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif|avif|bmp|tiff)$/i.test(file.name)) {
+            foundFiles.push(file);
           }
         }
       }
 
-      if (imageFiles.length > 0) {
+      // 2. Clipboard items (e.g. browser right-click "Copy Image", snippet, canvas copy)
+      if (clipboardData.items && clipboardData.items.length > 0) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+          const item = clipboardData.items[i];
+          if (item.type.startsWith("image/")) {
+            const blob = item.getAsFile();
+            if (blob) {
+              const ext = item.type.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+              foundFiles.push(new File([blob], `paste-${Date.now()}-${i}.${ext}`, { type: item.type }));
+            }
+          }
+        }
+      }
+
+      // If any image files were found in clipboard, process and upload them!
+      if (foundFiles.length > 0) {
         e.preventDefault();
-        handleFiles(imageFiles);
+        setPasteNotice(`Pasting ${foundFiles.length} image(s)...`);
+        setTimeout(() => setPasteNotice(null), 3500);
+        await handleFilesRef.current(foundFiles);
         return;
       }
 
-      // Check if text is a direct image URL (only if not focused on another input)
+      // 3. HTML clipboard (when copying image directly from websites like Amazon, Google, WhatsApp)
+      const html = clipboardData.getData("text/html");
+      if (html && html.includes("<img")) {
+        const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (match && match[1]) {
+          const src = match[1];
+          if (src.startsWith("data:image/")) {
+            e.preventDefault();
+            try {
+              setPasteNotice("Processing pasted image...");
+              const res = await fetch(src);
+              const blob = await res.blob();
+              const file = new File([blob], `paste-${Date.now()}.png`, { type: blob.type || "image/png" });
+              await handleFilesRef.current([file]);
+              setPasteNotice(null);
+              return;
+            } catch {}
+          } else if (src.startsWith("http")) {
+            e.preventDefault();
+            setPasteNotice("Adding image from copied web link...");
+            setTimeout(() => setPasteNotice(null), 3000);
+            setSlots((prev) => {
+              if (prev.some((s) => s.url === src)) return prev;
+              const updated = [...prev, { url: src, preview: src, uploading: false, error: null }];
+              pendingSyncRef.current = updated;
+              return updated;
+            });
+            return;
+          }
+        }
+      }
+
+      // 4. Plain text (e.g. copied direct image URL)
+      const text = clipboardData.getData("text/plain")?.trim();
       const activeTag = document.activeElement?.tagName?.toLowerCase();
-      if (activeTag !== "input" && activeTag !== "textarea") {
-        const text = e.clipboardData?.getData("text")?.trim();
-        if (text && /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|avif)(\?.*)?$/i.test(text)) {
+      // Only intercept URL paste if not actively typing inside a normal text input/textarea
+      if (text && /^https?:\/\/.+/i.test(text) && activeTag !== "input" && activeTag !== "textarea") {
+        const looksLikeImage =
+          /\.(jpg|jpeg|png|webp|gif|avif)(\?.*)?$/i.test(text) ||
+          text.includes("res.cloudinary.com") ||
+          text.includes("images.unsplash.com") ||
+          text.includes("media-amazon.com");
+
+        if (looksLikeImage) {
           e.preventDefault();
+          setPasteNotice("Adding image link...");
+          setTimeout(() => setPasteNotice(null), 3000);
           setSlots((prev) => {
             if (prev.some((s) => s.url === text)) return prev;
             const updated = [...prev, { url: text, preview: text, uploading: false, error: null }];
@@ -240,7 +310,7 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
     return () => {
       window.removeEventListener("paste", handlePaste);
     };
-  }, [handleFiles]);
+  }, []);
 
   const removeSlot = useCallback(async (idx: number) => {
     const slot = slots[idx];
@@ -290,6 +360,14 @@ export function ImageUploader({ value, onChange, maxImages = 20, folder = "produ
           </button>
         )}
       </div>
+
+      {/* Live Paste Notification */}
+      {pasteNotice && (
+        <div className="flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-200 px-3.5 py-2 text-xs font-semibold text-blue-700 animate-pulse">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+          <span>{pasteNotice}</span>
+        </div>
+      )}
 
       {/* Drop Zone — only show when no images yet or can add more */}
       {canAddMore && activeSlots.length === 0 && (
