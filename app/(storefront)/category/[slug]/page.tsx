@@ -89,6 +89,7 @@ export default async function CategoryDetailPage({
     }
     const variants = (p.ProductVariant || []) as Record<string, unknown>[];
     const inStock = variants.length === 0 || variants.some((v) => (v.stock as number) > 0);
+    const totalStock = variants.reduce((sum, v) => sum + ((v.stock as number) || 0), 0);
     const discountPercent = p.mrp > p.sellingPrice
       ? Math.round(((p.mrp - p.sellingPrice) / p.mrp) * 100)
       : 0;
@@ -100,9 +101,12 @@ export default async function CategoryDetailPage({
       mrp: p.mrp as number,
       images: (p.images as string[]) || [],
       imageUrl: ((p.images as string[]) || [])[0] || null,
+      image_url: ((p.images as string[]) || [])[0] || null,
       discountPercent,
+      discount_percent: discountPercent,
       badgeType: (discountPercent >= 25 ? "DEALS" : "SAVE") as "DEALS" | "SAVE",
       inStock,
+      totalStock,
     };
   });
 
@@ -183,6 +187,7 @@ export default async function CategoryDetailPage({
                 images={product.images}
                 discountPercent={product.discount_percent}
                 badgeType={product.discount_percent >= 30 ? "DEALS" : "SAVE"}
+                totalStock={product.totalStock}
               />
             ))}
           </div>

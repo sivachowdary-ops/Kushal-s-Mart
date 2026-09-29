@@ -19,6 +19,7 @@ export interface ProductCardProps {
   badgeType?: "DEALS" | "SAVE" | "NEW" | "BESTSELLER";
   discountPercent?: number;
   variants?: SwatchVariant[];
+  totalStock?: number;
 }
 
 export function ProductCard({
@@ -32,6 +33,7 @@ export function ProductCard({
   badgeType = "DEALS",
   discountPercent,
   variants = [],
+  totalStock,
 }: ProductCardProps) {
   const { addToCart } = useCart();
   const [isAdded, setIsAdded] = useState(false);
@@ -39,10 +41,12 @@ export function ProductCard({
   const calcDiscount = mrp && mrp > sellingPrice
     ? Math.round(((mrp - sellingPrice) / mrp) * 100)
     : discountPercent || 0;
+  const isSoldOut = typeof totalStock === "number" && totalStock <= 0;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isSoldOut) return;
     const firstVariant = variants && variants.length > 0 ? variants[0] : null;
     addToCart({
       productId: id || slug,
@@ -88,12 +92,12 @@ export function ProductCard({
         </div>
 
         {/* Product Image Area */}
-        <Link href={`/product/${slug}`} prefetch={true} className="block overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
+        <Link href={`/product/${slug}`} prefetch={true} className="block relative overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
           {displayImage ? (
             <img
               src={displayImage}
               alt={name}
-              className="mx-auto h-28 sm:h-44 w-full object-contain transition-transform duration-500 ease-out group-hover:scale-110"
+              className={`mx-auto h-28 sm:h-44 w-full object-contain transition-transform duration-500 ease-out group-hover:scale-110 ${isSoldOut ? "opacity-50 grayscale" : ""}`}
               loading="lazy"
             />
           ) : (
@@ -101,6 +105,13 @@ export function ProductCard({
               <svg viewBox="0 0 24 24" fill="currentColor" className="h-10 w-10 sm:h-16 sm:w-16">
                 <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth="1.5" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
+            </div>
+          )}
+          {isSoldOut && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="rounded-full bg-black/70 px-4 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider text-white shadow-lg">
+                Sold Out
+              </span>
             </div>
           )}
         </Link>
@@ -138,11 +149,14 @@ export function ProductCard({
         <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
           <button
             onClick={handleQuickAdd}
+            disabled={isSoldOut}
             className={`flex items-center justify-center gap-1 rounded-xl sm:rounded-2xl py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white shadow-xs transition-all duration-200 cursor-pointer ${
-              isAdded ? "bg-emerald-600 scale-95 shadow-emerald-600/30 shadow-md" : "bg-black hover:bg-red-600 hover:scale-102 active:scale-95 hover:shadow-md"
+              isSoldOut ? "bg-gray-300 cursor-not-allowed" : isAdded ? "bg-emerald-600 scale-95 shadow-emerald-600/30 shadow-md" : "bg-black hover:bg-red-600 hover:scale-102 active:scale-95 hover:shadow-md"
             }`}
           >
-            {isAdded ? (
+            {isSoldOut ? (
+              <span>Sold Out</span>
+            ) : isAdded ? (
               <>
                 <Check className="h-3.5 w-3.5 stroke-[3]" />
                 <span>Added!</span>

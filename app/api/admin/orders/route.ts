@@ -15,11 +15,19 @@ export async function GET(request: Request) {
   const user = await verifyAdminOrStaff(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
+  const { searchParams } = new URL(request.url);
+  const includePending = searchParams.get("include_pending") === "true";
+
+  let query = supabaseAdmin
     .from("Order")
     .select(`*, OrderItem ( * )`)
     .order("createdAt", { ascending: false });
 
+  if (!includePending) {
+    query = query.not("status", "in", "(PENDING_PAYMENT,PAYMENT_FAILED)");
+  }
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json((data || []).map(normalizeOrder));
 }

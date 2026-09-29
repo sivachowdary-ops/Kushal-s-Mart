@@ -103,6 +103,7 @@ export async function GET(request: Request) {
         ? Math.round(((effectiveMrp - effectivePrice) / effectiveMrp) * 100)
         : 0,
       in_stock: variants.some((v) => v.stock > 0),
+      total_stock: variants.reduce((sum, v) => sum + (v.stock || 0), 0),
     };
   });
 

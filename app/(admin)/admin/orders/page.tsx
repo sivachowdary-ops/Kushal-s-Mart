@@ -10,6 +10,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [channelFilter, setChannelFilter] = useState("ALL");
+  const [showPending, setShowPending] = useState(false);
 
   useEffect(() => {
     refreshOrders();
@@ -20,9 +21,13 @@ export default function OrdersPage() {
       (o.order_number && o.order_number.toLowerCase().includes(search.toLowerCase())) ||
       (o.customer_name && o.customer_name.toLowerCase().includes(search.toLowerCase()));
     
-    let matchesStatus = statusFilter === "ALL" || o.status === statusFilter;
-    if (statusFilter === "NEEDS_SHIPMENT") {
+    let matchesStatus = false;
+    if (statusFilter === "ALL") {
+      matchesStatus = o.status !== "PENDING_PAYMENT" && o.status !== "PAYMENT_FAILED";
+    } else if (statusFilter === "NEEDS_SHIPMENT") {
       matchesStatus = (o.payment_status === "PAID" || o.status === "PAID") && !o.shiprocket_awb;
+    } else {
+      matchesStatus = o.status === statusFilter;
     }
 
     const matchesChannel = channelFilter === "ALL" || o.channel === channelFilter;

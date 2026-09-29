@@ -52,6 +52,7 @@ export interface StorefrontProduct {
   discountPercent: number;
   badgeType: "DEALS" | "SAVE" | "NEW" | "BESTSELLER";
   inStock: boolean;
+  totalStock: number;
   variants: StorefrontVariant[];
 }
 
@@ -79,6 +80,7 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   }));
 
   const inStock = variants.length === 0 || variants.some((v) => v.stock > 0);
+  const totalStock = variants.reduce((sum, v) => sum + v.stock, 0);
   const disc = p.mrp > p.sellingPrice
     ? Math.round(((p.mrp - p.sellingPrice) / p.mrp) * 100)
     : 0;
@@ -123,6 +125,17 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   let subCategoryId = p.subCategoryId || p.sub_category_id || null;
   let subCategorySlug = p.subCategorySlug || p.sub_category_slug || (p.SubCategory?.slug || null);
   let subCategoryName = p.SubCategory?.name || null;
+
+  // Resolve name from slug when SubCategory relation isn't joined
+  if (subCategorySlug && !subCategoryName) {
+    const slugNameMap: Record<string, string> = {
+      "1-18-scale": "1/18 Scale", "1-24-scale": "1/24 Scale",
+      "1-32-scale": "1/32 Scale", "1-43-scale": "1/43 Scale",
+      "1-64-scale": "1/64 Scale", "hotwheels": "Hotwheels",
+      "off-road": "Off Road", "on-road": "On Road",
+    };
+    subCategoryName = slugNameMap[subCategorySlug] || subCategorySlug;
+  }
 
   if (!subCategorySlug) {
     const text = `${p.name} ${p.slug}`.toLowerCase();
@@ -197,6 +210,7 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     discountPercent: disc,
     badgeType: (disc >= 25 ? "DEALS" : "SAVE"),
     inStock,
+    totalStock,
     variants,
   };
 }
@@ -246,7 +260,7 @@ export async function getStorefrontData(forceRefresh = false): Promise<{
       supabaseAdmin
         .from("Product")
         .select(`
-          id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
+          id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description,
           Category ( id, name, slug ),
           ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
         `)
@@ -269,7 +283,7 @@ export async function getStorefrontData(forceRefresh = false): Promise<{
         supabaseAdmin
           .from("Product")
           .select(`
-            id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
+            id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description,
             Category ( id, name, slug ),
             ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
           `)
@@ -326,7 +340,7 @@ export async function getProductBySlug(slug: string): Promise<StorefrontProduct 
     const { data } = await supabaseAdmin
       .from("Product")
       .select(`
-        id, name, slug, brand, mrp, sellingPrice, images, categoryId, isActive, description,
+        id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description,
         Category ( id, name, slug ),
         ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
       `)

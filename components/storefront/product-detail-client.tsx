@@ -157,7 +157,8 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
     }
   };
 
-  const isInStock = product.inStock ?? product.in_stock ?? true;
+  const variantStock = currentVariant?.stock ?? 0;
+  const isInStock = variantStock > 0;
 
   return (
     <div className="bg-[#F4F5F7] min-h-screen pb-28 lg:pb-16">
@@ -308,12 +309,28 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   </span>
                 )}
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border ${
-                  isInStock
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-orange-50 text-orange-700 border-orange-200"
+                  !isInStock
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : variantStock <= 10
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
                 }`}>
-                  <Check className="h-3.5 w-3.5" />
-                  {isInStock ? "In Stock" : "Check Availability"}
+                  {!isInStock ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Out of Stock
+                    </>
+                  ) : variantStock <= 10 ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                      Only {variantStock} left!
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      In Stock
+                    </>
+                  )}
                 </span>
               </div>
 
@@ -367,8 +384,9 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   </button>
                   <span className="w-12 text-center text-sm font-extrabold text-gray-900">{quantity}</span>
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm hover:bg-gray-100 active:scale-95 transition-all"
+                    onClick={() => setQuantity(Math.min(variantStock, quantity + 1))}
+                    disabled={!isInStock || quantity >= variantStock}
+                    className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     aria-label="Increase quantity"
                   >
                     <Plus className="h-4 w-4" />
@@ -386,15 +404,25 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                 )}
                 <button
                   onClick={handleBuyNow}
-                  className="w-full min-h-[48px] rounded-2xl bg-red-600 py-4 text-xs font-black uppercase tracking-wider text-white shadow-xl transition-all duration-300 hover:bg-red-700 hover:scale-[1.01] active:scale-95"
+                  disabled={!isInStock}
+                  className={`w-full min-h-[48px] rounded-2xl py-4 text-xs font-black uppercase tracking-wider text-white shadow-xl transition-all duration-300 ${
+                    isInStock
+                      ? "bg-red-600 hover:bg-red-700 hover:scale-[1.01] active:scale-95"
+                      : "bg-gray-300 cursor-not-allowed"
+                  }`}
                 >
-                  BUY IT NOW (EXPRESS CHECKOUT)
+                  {isInStock ? "BUY IT NOW (EXPRESS CHECKOUT)" : "OUT OF STOCK"}
                 </button>
                 <button
                   onClick={handleAddToCart}
-                  className="w-full min-h-[48px] rounded-2xl bg-[#111625] py-4 text-xs font-black uppercase tracking-wider text-white shadow-md transition-all duration-300 hover:bg-black active:scale-95"
+                  disabled={!isInStock}
+                  className={`w-full min-h-[48px] rounded-2xl py-4 text-xs font-black uppercase tracking-wider text-white shadow-md transition-all duration-300 ${
+                    isInStock
+                      ? "bg-[#111625] hover:bg-black active:scale-95"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
                 >
-                  ADD TO CART
+                  {isInStock ? "ADD TO CART" : "OUT OF STOCK"}
                 </button>
                 <a
                   href={`https://wa.me/917288907757?text=${whatsappMsg}`}
@@ -500,18 +528,26 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleAddToCart}
-              className="min-h-[44px] rounded-2xl border-2 border-black bg-white px-3.5 py-2 text-xs font-black uppercase text-black hover:bg-gray-50 active:scale-95 transition-all"
-            >
-              Add to Cart
-            </button>
-            <button
-              onClick={handleBuyNow}
-              className="min-h-[44px] rounded-2xl bg-red-600 px-4 py-2 text-xs font-black uppercase text-white shadow-md hover:bg-red-700 active:scale-95 transition-all"
-            >
-              Buy It Now
-            </button>
+            {isInStock ? (
+              <>
+                <button
+                  onClick={handleAddToCart}
+                  className="min-h-[44px] rounded-2xl border-2 border-black bg-white px-3.5 py-2 text-xs font-black uppercase text-black hover:bg-gray-50 active:scale-95 transition-all"
+                >
+                  Add to Cart
+                </button>
+                <button
+                  onClick={handleBuyNow}
+                  className="min-h-[44px] rounded-2xl bg-red-600 px-4 py-2 text-xs font-black uppercase text-white shadow-md hover:bg-red-700 active:scale-95 transition-all"
+                >
+                  Buy It Now
+                </button>
+              </>
+            ) : (
+              <span className="min-h-[44px] flex items-center rounded-2xl bg-gray-300 px-6 py-2 text-xs font-black uppercase text-white">
+                Sold Out
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -18,6 +18,7 @@ interface StoreProduct {
   category_id: string;
   category_slug: string | null;
   in_stock: boolean;
+  total_stock?: number;
 }
 
 interface StoreCategory {
@@ -203,6 +204,7 @@ export default function ShopPage() {
                     images={product.images}
                     discountPercent={product.discount_percent}
                     badgeType={product.discount_percent >= 30 ? "DEALS" : "SAVE"}
+                    totalStock={product.total_stock}
                   />
                 ))}
               </div>

@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       )
     `)
     .or(`customerPhone.eq.${phoneSuffix},customerPhone.eq.+91${phoneSuffix},customerPhone.eq.91${phoneSuffix}`)
-    .neq("status", "CANCELLED")
+    .not("status", "in", "(CANCELLED,PENDING_PAYMENT,PAYMENT_FAILED)")
     .order("createdAt", { ascending: false });
 
   if (error) {
