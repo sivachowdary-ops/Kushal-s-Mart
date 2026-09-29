@@ -97,6 +97,7 @@ export default function NewProductPage() {
         description,
         category_id: categoryId || null,
         sub_category_id: subCategoryId || null,
+        sub_category_slug: subcategories.find((s) => s.id === subCategoryId)?.slug || null,
         brand,
         mrp: Math.round(parseFloat(mrp || "0") * 100),
         selling_price: Math.round(parseFloat(sellingPrice || "0") * 100),

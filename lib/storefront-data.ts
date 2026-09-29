@@ -126,6 +126,23 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   let subCategorySlug = p.subCategorySlug || p.sub_category_slug || (p.SubCategory?.slug || null);
   let subCategoryName = p.SubCategory?.name || null;
 
+  // If subCategoryId is present but subCategorySlug is missing, resolve it from known IDs
+  if (subCategoryId && !subCategorySlug) {
+    const idToSlugMap: Record<string, string> = {
+      "sub-diecast-1-18": "1-18-scale",
+      "sub-diecast-1-24": "1-24-scale",
+      "sub-diecast-1-32": "1-32-scale",
+      "sub-diecast-1-43": "1-43-scale",
+      "sub-diecast-1-64": "1-64-scale",
+      "sub-diecast-hotwheels": "hotwheels",
+      "sub-rc-off-road": "off-road",
+      "sub-rc-on-road": "on-road",
+    };
+    if (idToSlugMap[subCategoryId]) {
+      subCategorySlug = idToSlugMap[subCategoryId];
+    }
+  }
+
   // Resolve name from slug when SubCategory relation isn't joined
   if (subCategorySlug && !subCategoryName) {
     const slugNameMap: Record<string, string> = {

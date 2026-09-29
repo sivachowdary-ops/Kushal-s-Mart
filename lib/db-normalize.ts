@@ -152,6 +152,21 @@ export function toProductDB(body: Record<string, unknown>) {
   };
   if (body.sub_category_id !== undefined) {
     row.subCategoryId = body.sub_category_id || null;
+    if (!body.sub_category_slug && body.sub_category_id) {
+      const idToSlugMap: Record<string, string> = {
+        "sub-diecast-1-18": "1-18-scale",
+        "sub-diecast-1-24": "1-24-scale",
+        "sub-diecast-1-32": "1-32-scale",
+        "sub-diecast-1-43": "1-43-scale",
+        "sub-diecast-1-64": "1-64-scale",
+        "sub-diecast-hotwheels": "hotwheels",
+        "sub-rc-off-road": "off-road",
+        "sub-rc-on-road": "on-road",
+      };
+      if (idToSlugMap[body.sub_category_id as string]) {
+        row.subCategorySlug = idToSlugMap[body.sub_category_id as string];
+      }
+    }
   }
   if (body.sub_category_slug !== undefined) {
     row.subCategorySlug = body.sub_category_slug || null;
