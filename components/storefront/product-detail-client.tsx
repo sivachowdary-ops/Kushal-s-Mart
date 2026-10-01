@@ -114,6 +114,21 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
     setSelectedImage(0);
   }, [selectedVariantId]);
 
+  // Preload all product and variant images in the background so mobile color switching is instantaneous
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const allUrls = new Set<string>();
+    (product.images || []).forEach((img) => { if (img) allUrls.add(img); });
+    (product.variants || []).forEach((v) => {
+      (v.images || []).forEach((img) => { if (img) allUrls.add(img); });
+    });
+
+    allUrls.forEach((url) => {
+      const img = new Image();
+      img.src = url;
+    });
+  }, [product]);
+
   const whatsappMsg = encodeURIComponent(
     `Hi Kushal's Mart, I want to order this product:\n\nProduct: ${product.name}\nVariant: ${currentVariant?.name || ""}\nPrice: ${formatPrice(activePrice)}`
   );
@@ -213,8 +228,9 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                 <img
                   src={activeImages[selectedImage] || activeImages[0]}
                   alt={product.name}
-                  key={activeImages[selectedImage] || selectedImage}
-                  className="h-full w-full object-contain transition-all duration-300 hover:scale-105 animate-fade-in"
+                  loading="eager"
+                  decoding="async"
+                  className="h-full w-full object-contain transition-transform duration-300 hover:scale-105"
                 />
               ) : (
                 <div className="flex flex-col items-center gap-3 text-gray-300">
@@ -290,7 +306,13 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                         : "border-gray-200 hover:border-gray-400 opacity-70 hover:opacity-100"
                     }`}
                   >
-                    <img src={img} alt="" className="h-full w-full object-contain" />
+                    <img
+                      src={img}
+                      alt=""
+                      loading="eager"
+                      decoding="async"
+                      className="h-full w-full object-contain"
+                    />
                   </button>
                 ))}
               </div>
