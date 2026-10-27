@@ -24,9 +24,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Filter only staff accounts created for POS
+    // Filter only staff accounts created for POS (role lives in server-only app_metadata)
     const posStaffUsers = (data.users || [])
-      .filter((u) => u.user_metadata?.role === "pos_staff")
+      .filter((u) => u.app_metadata?.role === "pos_staff")
       .map((u) => ({
         id: u.id,
         email: u.email || "",
@@ -77,8 +77,11 @@ export async function POST(request: Request) {
       email: cleanEmail,
       password: password,
       email_confirm: true, // Cashiers can sign in immediately without email link verification
-      user_metadata: {
+      // Role MUST live in app_metadata — user_metadata is editable by the user
+      app_metadata: {
         role: "pos_staff",
+      },
+      user_metadata: {
         name: staffName,
       },
     });
@@ -133,7 +136,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Staff user not found." }, { status: 404 });
     }
 
-    if (userRecord.user.user_metadata?.role !== "pos_staff") {
+    if (userRecord.user.app_metadata?.role !== "pos_staff") {
       return NextResponse.json(
         { error: "Only POS staff accounts can be deleted through this endpoint." },
         { status: 403 }

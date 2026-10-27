@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAdminStore, AdminProduct, AdminVariant, AdminOrder } from "@/lib/admin-store";
 import { supabase } from "@/lib/supabase-client";
+import { resolveUserRole } from "@/lib/roles";
 import { formatDateShort, formatTime } from "@/lib/utils";
 import { checkAuthLockout, recordFailedAuthAttempt, resetAuthAttempts } from "@/lib/auth-rate-limit";
 import {
@@ -106,10 +107,8 @@ export default function StandalonePOSPage() {
 
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const role = session.user.user_metadata?.role;
-          const isAdmin = session.user.email === "jogabetha@gmail.com" || session.user.email === "sivaprasadpenneti8@gmail.com" || role === "admin";
-          const isPosStaff = role === "pos_staff";
-          if (isAdmin || isPosStaff) {
+          // UI gate only — the API re-checks the role server-side on every call
+          if (resolveUserRole(session.user)) {
             setIsRegisterUnlocked(true);
             const staffDisplayName = (session.user.user_metadata?.name as string) || session.user.email || "Cashier";
             setCashierName(staffDisplayName);
@@ -165,11 +164,7 @@ export default function StandalonePOSPage() {
         }
       } else if (data.session && data.user) {
         // Enforce role authorization: Must be registered pos_staff or store admin
-        const role = data.user.user_metadata?.role;
-        const isAdmin = data.user.email === "sivaprasadpenneti8@gmail.com" || data.user.email === "jogabetha@gmail.com" || role === "admin";
-        const isPosStaff = role === "pos_staff";
-
-        if (!isAdmin && !isPosStaff) {
+        if (!resolveUserRole(data.user)) {
           await supabase.auth.signOut();
           setPosAuthError("Access Denied: This account is not authorized for the store POS terminal. Contact your store administrator.");
           return;

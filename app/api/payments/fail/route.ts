@@ -7,21 +7,27 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  * Records a client-side payment failure or cancellation.
  * Updates Order status to 'PAYMENT_FAILED' and paymentStatus to 'FAILED',
  * and updates the payments audit log so the admin dashboard reflects it instantly.
+ *
+ * SECURITY: unauthenticated, so it may only ever touch orders that are still
+ * PENDING_PAYMENT. A paid order (e.g. the webhook landed before the customer
+ * closed the Razorpay window) is never downgraded.
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { orderId, reason } = body as { orderId?: string; reason?: string };
+    const body = await request.json().catch(() => ({}));
+    const { orderId, reason } = body as { orderId?: unknown; reason?: unknown };
 
-    if (!orderId) {
+    if (typeof orderId !== "string" || !orderId) {
       return NextResponse.json({ error: "orderId is required" }, { status: 400 });
     }
 
-    const failureReason = reason || "Payment failed or was cancelled by user";
+    const failureReason =
+      (typeof reason === "string" && reason.trim().slice(0, 300)) ||
+      "Payment failed or was cancelled by user";
     const now = new Date().toISOString();
 
-    // 1. Update Order table
-    const { data: order, error: orderError } = await supabaseAdmin
+    // 1. Update Order table — only while still awaiting payment
+    const { data: updated, error: orderError } = await supabaseAdmin
       .from("Order")
       .update({
         status: "PAYMENT_FAILED",
@@ -29,33 +35,35 @@ export async function POST(request: Request) {
         updatedAt: now,
       })
       .eq("id", orderId)
-      .select("id, orderNumber")
-      .maybeSingle();
+      .eq("status", "PENDING_PAYMENT")
+      .select("id, orderNumber");
 
     if (orderError) {
-      console.error("[payments/fail] DB error updating order:", orderError);
+      console.error("[payments/fail] DB error updating order:", orderError.message);
+      return NextResponse.json({ error: "Could not record payment failure" }, { status: 500 });
     }
 
-    // 2. Update payments table if a record exists
-    try {
-      await supabaseAdmin
-        .from("payments")
-        .update({
-          status: "failed",
-          failure_reason: failureReason,
-          updated_at: now,
-        })
-        .eq("order_id", orderId);
-    } catch {
-      // Non-blocking
+    if (!updated || updated.length === 0) {
+      // Already paid, failed, cancelled or unknown — nothing to do
+      return NextResponse.json({ success: true, updated: false });
     }
 
-    console.log(`[payments/fail] Order ${order?.orderNumber || orderId} marked as PAYMENT_FAILED: ${failureReason}`);
+    // 2. Update payments table if an unpaid record exists
+    await supabaseAdmin
+      .from("payments")
+      .update({
+        status: "failed",
+        failure_reason: failureReason,
+        updated_at: now,
+      })
+      .eq("order_id", orderId)
+      .in("status", ["created", "active"]);
 
-    return NextResponse.json({ success: true });
+    console.log(`[payments/fail] Order ${updated[0].orderNumber} marked as PAYMENT_FAILED: ${failureReason}`);
+
+    return NextResponse.json({ success: true, updated: true });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to record payment failure";
-    console.error("[payments/fail] Error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[payments/fail] Error:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Failed to record payment failure" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase-client";
+import { MfaSettings } from "@/components/admin/mfa-settings";
 import {
   Store,
   Database,
@@ -337,6 +338,8 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
+
+      <MfaSettings />
 
       {/* POS Cashier & Staff Accounts — Full Width Featured Section */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">

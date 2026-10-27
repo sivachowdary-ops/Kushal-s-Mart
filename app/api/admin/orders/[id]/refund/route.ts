@@ -14,28 +14,31 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Admin auth check
-    await verifyAdmin(request);
+  const admin = await verifyAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  try {
     const { id } = await params;
     const body = await request.json();
     const { amount, note } = body as { amount: number; note: string };
 
     // Validate amount (in paise)
-    if (!amount || amount <= 0) {
+    if (!Number.isInteger(amount) || amount <= 0) {
       return NextResponse.json(
         { error: "Refund amount must be greater than 0" },
         { status: 400 }
       );
     }
 
-    // Look up the paid payment for this order
+    // Look up the paid payment for this order (partial refunds can be topped up;
+    // Razorpay itself rejects refunds beyond the captured amount)
     const { data: paymentRow } = await supabaseAdmin
       .from("payments")
       .select("*")
       .eq("order_id", id)
-      .eq("status", "paid")
+      .in("status", ["paid", "partially_refunded"])
       .maybeSingle();
 
     let razorpayPaymentId = paymentRow?.razorpay_payment_id;
@@ -49,7 +52,10 @@ export async function POST(
         .eq("id", id)
         .single();
 
-      if (orderRow?.razorpayPaymentId && orderRow.paymentStatus === "PAID") {
+      if (
+        orderRow?.razorpayPaymentId &&
+        (orderRow.paymentStatus === "PAID" || orderRow.paymentStatus === "PARTIALLY_REFUNDED")
+      ) {
         razorpayPaymentId = orderRow.razorpayPaymentId;
         maxRefundAmount = orderRow.total;
       }
@@ -82,16 +88,22 @@ export async function POST(
       },
     });
 
-    // Update payment status
-    const newStatus = amount === paymentRow.amount ? "refunded" : "partially_refunded";
+    // Update payment status — paymentRow may be null when we fell back to the Order table
+    const newStatus = amount === maxRefundAmount ? "refunded" : "partially_refunded";
+    const now = new Date().toISOString();
 
+    if (paymentRow) {
+      await supabaseAdmin
+        .from("payments")
+        .update({ status: newStatus, updated_at: now })
+        .eq("id", paymentRow.id);
+    }
+
+    // Record on the Order too, so the fallback lookup above can't allow a second refund
     await supabaseAdmin
-      .from("payments")
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", paymentRow.id);
+      .from("Order")
+      .update({ paymentStatus: newStatus.toUpperCase(), updatedAt: now })
+      .eq("id", id);
 
     console.log(
       `[Razorpay Refund] ${newStatus} for order ${id}: ₹${(amount / 100).toFixed(2)}`

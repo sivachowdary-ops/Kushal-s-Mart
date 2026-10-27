@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { resolveUserRole } from "@/lib/roles";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+
+/**
+ * POST /api/admin/auth/login
+ * Confirms the Bearer token belongs to an admin. Deliberately does NOT require
+ * MFA, so the login screen can tell an admin to complete the TOTP step.
+ */
 export async function POST(request: Request) {
   // Rate-limit admin login: 5 attempts per 15 min per IP (playbook §7.3, §10)
   const ip = getClientIp(request);
@@ -17,7 +23,7 @@ export async function POST(request: Request) {
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.slice("Bearer ".length).trim();
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -28,23 +34,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    // Server-side role verification: check app_metadata or authorized admin list
-    const isAdmin =
-      user.app_metadata?.role === "admin" ||
-      user.user_metadata?.role === "admin" ||
-      user.email === "jogabetha@gmail.com" ||
-      user.email === "sivaprasadpenneti8@gmail.com";
-
-    if (!isAdmin) {
+    if (resolveUserRole(user) !== "admin") {
       return NextResponse.json({ error: "Access denied. Not an admin user." }, { status: 403 });
     }
 
     return NextResponse.json({
       success: true,
       user: { id: user.id, email: user.email, role: "admin" },
+      mfaRequired: process.env.ADMIN_REQUIRE_MFA === "true",
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Authentication failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }
 }

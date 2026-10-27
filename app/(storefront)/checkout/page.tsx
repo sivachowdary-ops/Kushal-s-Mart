@@ -240,6 +240,10 @@ function CheckoutContent() {
 
       // Wrap Razorpay in a promise so we can await the result
       await new Promise<void>((resolve, reject) => {
+        // Razorpay keeps its window open after a failed attempt so the customer can
+        // retry, so a failure is only final once the window is closed.
+        let lastFailureReason: string | null = null;
+
         const options = {
           key: keyToUse,
           amount,
@@ -288,10 +292,29 @@ function CheckoutContent() {
           },
           modal: {
             ondismiss: async () => {
-              const reason = "Payment was cancelled or closed before completing.";
+              // A UPI payment can complete in the UPI app before the window is closed —
+              // if the webhook already confirmed it, treat this as a success.
+              try {
+                const statusRes = await fetch(`/api/orders/${orderNumber}/status`);
+                if (statusRes.ok) {
+                  const statusData = await statusRes.json();
+                  if (statusData.paymentStatus === "PAID") {
+                    setIsSuccess(true);
+                    if (!isBuyNow) clearCart();
+                    resolve();
+                    return;
+                  }
+                }
+              } catch {
+                // fall through to the failure path
+              }
+
+              const reason = lastFailureReason || "Payment was cancelled or closed before completing.";
               setPaymentFailedInfo({
                 failed: true,
-                reason: "Payment window was closed. No money was deducted. You can retry anytime with UPI, Card, or Net Banking.",
+                reason: lastFailureReason
+                  ? `${lastFailureReason} You can retry with UPI, Card, or Net Banking.`
+                  : "Payment window was closed before the payment completed. You can retry anytime with UPI, Card, or Net Banking.",
               });
 
               try {
@@ -310,26 +333,11 @@ function CheckoutContent() {
         };
 
         const rzp = new RazorpayConstructor(options);
-        rzp.on("payment.failed", async (response: unknown) => {
+        rzp.on("payment.failed", (response: unknown) => {
+          // Don't end checkout here — Razorpay lets the customer retry in the same
+          // window. The failure is recorded when the window is closed (ondismiss).
           const rzpErr = (response as { error?: { description?: string; reason?: string } })?.error;
-          const reason = rzpErr?.description || rzpErr?.reason || "Payment failed or was declined by the bank.";
-
-          setPaymentFailedInfo({
-            failed: true,
-            reason,
-          });
-
-          try {
-            await fetch("/api/payments/fail", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderId, reason }),
-            });
-          } catch {
-            // non-blocking
-          }
-
-          reject(new Error(reason));
+          lastFailureReason = rzpErr?.description || rzpErr?.reason || "Payment failed or was declined by the bank.";
         });
         rzp.open();
       });
@@ -443,7 +451,7 @@ function CheckoutContent() {
                       {paymentFailedInfo.reason}
                     </p>
                     <p className="text-[11px] font-semibold text-red-600">
-                      ✓ No money was deducted from your account. Your cart and shipping details are safe.
+                      Your cart and shipping details are saved. If any amount was debited, your order will be confirmed automatically — check Track Order before paying again.
                     </p>
                   </div>
                 </div>

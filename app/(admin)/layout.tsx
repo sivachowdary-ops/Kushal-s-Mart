@@ -9,6 +9,17 @@ import { supabase } from "@/lib/supabase-client";
 import { ShieldCheck, Mail, KeyRound, AlertCircle, ShieldAlert } from "lucide-react";
 import { checkAuthLockout, recordFailedAuthAttempt, resetAuthAttempts } from "@/lib/auth-rate-limit";
 
+/**
+ * Returns the TOTP factor to challenge if this admin has 2FA enrolled but the
+ * current session hasn't passed it yet (aal1 → aal2), otherwise null.
+ */
+async function getPendingMfaFactor(): Promise<string | null> {
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (!aal || aal.nextLevel !== "aal2" || aal.currentLevel === "aal2") return null;
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  return factors?.totp[0]?.id ?? null;
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -18,6 +29,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Two-factor (Supabase MFA) step — set when the password was right but a TOTP code is still needed
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   // Rate-limit lockout
   const [isLockedOut, setIsLockedOut] = useState(false);
@@ -58,8 +73,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
           if (verifyRes.ok) {
-            setIsAuthenticated(true);
             setUserEmail(session.user.email ?? null);
+            const pendingFactor = await getPendingMfaFactor();
+            if (pendingFactor) {
+              setMfaFactorId(pendingFactor);
+            } else {
+              setIsAuthenticated(true);
+            }
           } else {
             // Not an admin — don't grant access
             try { localStorage.removeItem("admin_token"); } catch {}
@@ -74,16 +94,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     checkSession();
 
+    // Keep the stored token fresh and react to sign-out. Granting access is left to
+    // the explicit admin + 2FA checks above — any signed-in user triggers this event.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         if (session.access_token) {
           try { localStorage.setItem("admin_token", session.access_token); } catch {}
         }
-        setIsAuthenticated(true);
-        setUserEmail(session.user.email ?? null);
       } else {
         try { localStorage.removeItem("admin_token"); } catch {}
         setIsAuthenticated(false);
+        setMfaFactorId(null);
         setUserEmail(null);
       }
     });
@@ -138,8 +159,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
         resetAuthAttempts(email.trim());
-        setIsAuthenticated(true);
         setUserEmail(data.user.email ?? null);
+        const pendingFactor = await getPendingMfaFactor();
+        if (pendingFactor) {
+          setMfaFactorId(pendingFactor);
+        } else {
+          setIsAuthenticated(true);
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Authentication failed.");
@@ -148,9 +174,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   };
 
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaFactorId) return;
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const { error: verifyErr } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: mfaFactorId,
+        code: mfaCode.trim(),
+      });
+      if (verifyErr) {
+        setError("Invalid 6-digit code. Check your authenticator app and try again.");
+        return;
+      }
+      setMfaFactorId(null);
+      setMfaCode("");
+      setIsAuthenticated(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "2FA verification failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleLogout = async () => {
     try { localStorage.removeItem("admin_token"); } catch {}
     setIsAuthenticated(false);
+    setMfaFactorId(null);
     setUserEmail(null);
     await supabase.auth.signOut();
   };
@@ -205,6 +256,43 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             )}
 
+            {mfaFactorId ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1.5">
+                  <ShieldCheck className="inline h-3.5 w-3.5 mr-1 text-gray-400" />
+                  6-digit code from your authenticator app
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  required
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-3.5 text-center font-mono text-lg tracking-widest text-gray-900 focus:border-red-500 focus:bg-white focus:outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmitting || mfaCode.length !== 6}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-xs font-black uppercase tracking-wider text-white shadow-xl transition-all hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                <ShieldCheck className="h-5 w-5" />
+                <span>{isSubmitting ? "VERIFYING..." : "VERIFY CODE"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full text-[11px] font-bold text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                Use a different account
+              </button>
+            </form>
+            ) : (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1.5">
@@ -246,6 +334,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <span>{isLockedOut ? "LOCKED" : isSubmitting ? "SIGNING IN..." : "LOGIN TO DASHBOARD"}</span>
               </button>
             </form>
+            )}
 
             <div className="pt-2 border-t border-gray-100 text-center">
               <p className="text-[11px] font-semibold text-gray-400">5-Attempt Security Lockout · Session Protected</p>

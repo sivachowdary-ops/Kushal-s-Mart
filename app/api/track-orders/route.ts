@@ -32,14 +32,13 @@ export async function GET(request: Request) {
   const { data: orders, error } = await supabaseAdmin
     .from("Order")
     .select(`
-      id, orderNumber, status, channel,
-      customerName,
+      orderNumber, status, channel,
       subtotal, discount, total,
       paymentStatus, paymentMode,
       shiprocketAwb, courierName,
       createdAt, updatedAt,
       OrderItem (
-        id, productName, variantName,
+        productName, variantName,
         unitPrice, quantity, lineTotal, image
       )
     `)
@@ -52,10 +51,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
 
-  // Return sanitized orders — safe for public tracking
+  // Return sanitized orders — safe for public tracking.
+  // Never return internal order/item IDs (they are accepted by payment endpoints)
+  // or the customer's name: knowing a phone number is not proof of identity.
   const sanitized = (orders || []).map((o: Record<string, unknown>) => {
-    const rawItems = ((o.OrderItem as Record<string, unknown>[]) || []).map((item) => ({
-      id: item.id as string || String(Math.random()),
+    const rawItems = ((o.OrderItem as Record<string, unknown>[]) || []).map((item, idx) => ({
+      id: `${o.orderNumber}-${idx}`,
       product_name: item.productName as string,
       variant_name: item.variantName as string,
       quantity: item.quantity as number,
@@ -119,10 +120,9 @@ export async function GET(request: Request) {
     }
 
     return {
-      id: o.id as string || (o.orderNumber as string),
+      id: o.orderNumber as string,
       order_number: o.orderNumber,
       status: normalizedStatus,
-      customer_name: o.customerName,
       subtotal: o.subtotal,
       discount: o.discount,
       total: o.total,

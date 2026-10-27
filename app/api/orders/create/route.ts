@@ -17,11 +17,48 @@ interface OrderItemRecord {
   image: string | null;
 }
 
+interface VariantRow {
+  id: string;
+  name: string;
+  stock: number | null;
+  sellingPriceOverride: number | null;
+  images: string[] | null;
+}
+
+interface ProductRow {
+  id: string;
+  name: string;
+  sellingPrice: number;
+  costPrice: number | null;
+  isActive: boolean;
+  images: string[] | null;
+  ProductVariant: VariantRow[] | null;
+}
+
+const MAX_CART_LINES = 50;
+const MAX_QTY_PER_LINE = 20;
+
 function generateOrderNumber() {
   const date = new Date();
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
   const randomStr = Math.floor(1000 + Math.random() * 9000).toString();
   return `KM-${dateStr}-${randomStr}`;
+}
+
+function cleanText(value: unknown, maxLength: number): string {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+/** Normalises Indian mobile numbers to 10 digits; returns "" if invalid. */
+function normalizePhone(value: unknown): string {
+  let digits = typeof value === "string" ? value.replace(/\D/g, "") : "";
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return /^[6-9]\d{9}$/.test(digits) ? digits : "";
+}
+
+function badRequest(error: string) {
+  return NextResponse.json({ error }, { status: 400 });
 }
 
 /**
@@ -36,6 +73,9 @@ function generateOrderNumber() {
  *
  * Shiprocket/Delhivery dispatch is NOT triggered here — that also
  * happens in the webhook handler after payment confirmation.
+ *
+ * Every price, name and image comes from the database; the client only
+ * chooses product, variant and quantity.
  */
 export async function POST(request: Request) {
   try {
@@ -49,97 +89,123 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { customer_name, customer_phone, customer_email, shipping_address, items } = body;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return badRequest("Invalid request body");
+
+    const { items } = body as { items?: unknown };
     const channel = "ONLINE"; // Always ONLINE for public API — OFFLINE only via POS/admin
 
-    if (!items || items.length === 0) {
-      return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    // ── Customer & address validation ─────────────────────────────────────
+    const customerName = cleanText(body.customer_name, 100);
+    const customerPhone = normalizePhone(body.customer_phone);
+    const customerEmail = cleanText(body.customer_email, 200) || null;
+    const rawAddress = (body.shipping_address || {}) as Record<string, unknown>;
+    const shippingAddress = {
+      address: cleanText(rawAddress.address, 500),
+      city: cleanText(rawAddress.city, 100),
+      state: cleanText(rawAddress.state, 100),
+      pincode: typeof rawAddress.pincode === "string" ? rawAddress.pincode.replace(/\D/g, "") : "",
+    };
+
+    if (!Array.isArray(items) || items.length === 0) return badRequest("Cart is empty");
+    if (items.length > MAX_CART_LINES) return badRequest("Too many items in cart");
+    if (!customerName) return badRequest("Customer name is required");
+    if (!customerPhone) return badRequest("Please enter a valid 10-digit mobile number");
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return badRequest("Please enter a valid email address");
+    }
+    if (!shippingAddress.address || !shippingAddress.city || !/^\d{6}$/.test(shippingAddress.pincode)) {
+      return badRequest("Complete shipping address with a valid 6-digit PIN code is required");
     }
 
-    if (!customer_name || !customer_phone) {
-      return NextResponse.json({ error: "Customer name and phone are required" }, { status: 400 });
-    }
-
-    if (!shipping_address?.address || !shipping_address?.city || !shipping_address?.pincode) {
-      return NextResponse.json({ error: "Complete shipping address is required" }, { status: 400 });
+    // ── Line validation — quantities must be positive whole numbers ───────
+    const lines: { productId: string; variantId: string; quantity: number }[] = [];
+    for (const raw of items as Record<string, unknown>[]) {
+      const productId = typeof raw?.product_id === "string" ? raw.product_id : "";
+      const variantId = typeof raw?.variant_id === "string" ? raw.variant_id : "";
+      const quantity = raw?.quantity;
+      if (!productId) return badRequest("Invalid cart item");
+      if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QTY_PER_LINE) {
+        return badRequest(`Quantity must be a whole number between 1 and ${MAX_QTY_PER_LINE}`);
+      }
+      lines.push({ productId, variantId, quantity });
     }
 
     // Fetch products and variants for server-side price calculation
-    const productIds = items.map((item: Record<string, unknown>) => item.product_id);
+    const productIds = [...new Set(lines.map((l) => l.productId))];
     const { data: products, error: productsError } = await supabaseAdmin
       .from("Product")
-      .select("id, name, sellingPrice, costPrice, ProductVariant ( id, name, stock, sellingPriceOverride )")
+      .select("id, name, sellingPrice, costPrice, isActive, images, ProductVariant ( id, name, stock, sellingPriceOverride, images )")
       .in("id", productIds);
 
-    if (productsError) return NextResponse.json({ error: productsError.message }, { status: 500 });
+    if (productsError) {
+      console.error("[orders/create] Product lookup failed:", productsError.message);
+      return NextResponse.json({ error: "Could not load products. Please try again." }, { status: 500 });
+    }
 
-    const productMap: Record<string, Record<string, unknown>> = {};
-    (products || []).forEach((p: Record<string, unknown>) => {
-      productMap[p.id as string] = p;
-    });
+    const productMap = new Map<string, ProductRow>();
+    for (const p of (products || []) as ProductRow[]) productMap.set(p.id, p);
 
-    // ── Stock validation — check before creating order ──────────────────────
-    for (const item of items as Record<string, unknown>[]) {
-      const product = productMap[item.product_id as string];
-      if (!product) {
-        return NextResponse.json(
-          { error: `Product not found: ${item.product_id}` },
-          { status: 400 }
-        );
+    // ── Resolve each line to a real, active variant and merge duplicates ──
+    const resolved = new Map<string, { product: ProductRow; variant: VariantRow; quantity: number }>();
+    for (const line of lines) {
+      const product = productMap.get(line.productId);
+      if (!product || !product.isActive) {
+        return badRequest("One of the products in your cart is no longer available");
       }
 
-      const variants = (product.ProductVariant as Record<string, unknown>[]) || [];
-      const matchedVariant = variants.find((v) => v.id === item.variant_id);
+      const variants = product.ProductVariant || [];
+      let variant = variants.find((v) => v.id === line.variantId);
+      if (!variant && (!line.variantId || line.variantId === "default")) {
+        variant = variants[0];
+      }
+      if (!variant) {
+        return badRequest(`"${product.name}" is no longer available in the selected option`);
+      }
 
-      if (matchedVariant) {
-        const availableStock = (matchedVariant.stock as number) || 0;
-        const requestedQty = item.quantity as number;
+      const existing = resolved.get(variant.id);
+      if (existing) existing.quantity += line.quantity;
+      else resolved.set(variant.id, { product, variant, quantity: line.quantity });
+    }
 
-        if (availableStock < requestedQty) {
-          return NextResponse.json(
-            {
-              error: `"${product.name}" (${matchedVariant.name}) is out of stock. Only ${availableStock} available.`,
-            },
-            { status: 400 }
-          );
-        }
+    // ── Stock validation — on the merged quantity per variant ─────────────
+    for (const { product, variant, quantity } of resolved.values()) {
+      const availableStock = variant.stock || 0;
+      if (availableStock < quantity) {
+        return badRequest(
+          availableStock > 0
+            ? `"${product.name}" (${variant.name}) — only ${availableStock} left in stock.`
+            : `"${product.name}" (${variant.name}) is out of stock.`
+        );
       }
     }
 
     // ── Server-side price calculation ───────────────────────────────────────
     let subtotal = 0;
-
-    const orderItems: OrderItemRecord[] = items.map((item: Record<string, unknown>) => {
-      const product = productMap[item.product_id as string];
-      if (!product) throw new Error(`Product ${item.product_id} not found`);
-
-      const variants = (product.ProductVariant as Record<string, unknown>[]) || [];
-      let matchedVariant = variants.find((v) => v.id === item.variant_id);
-      if (!matchedVariant && variants.length > 0) {
-        matchedVariant = variants[0];
+    const orderItems: OrderItemRecord[] = [];
+    for (const { product, variant, quantity } of resolved.values()) {
+      const unitPrice = variant.sellingPriceOverride != null ? variant.sellingPriceOverride : product.sellingPrice;
+      if (!Number.isInteger(unitPrice) || unitPrice <= 0) {
+        return badRequest(`"${product.name}" is not available for online purchase right now`);
       }
-
-      const unitPrice = (matchedVariant?.sellingPriceOverride != null)
-        ? (matchedVariant.sellingPriceOverride as number)
-        : (product.sellingPrice as number);
-      const costPrice = (product.costPrice as number) || 0;
-      const lineTotal = unitPrice * (item.quantity as number);
-
+      const lineTotal = unitPrice * quantity;
       subtotal += lineTotal;
 
-      return {
-        productId: item.product_id as string,
-        variantId: matchedVariant ? (matchedVariant.id as string) : (item.variant_id as string || "default"),
-        productName: product.name as string,
-        variantName: (matchedVariant?.name as string) || (item.variant_name as string) || "Standard",
+      orderItems.push({
+        productId: product.id,
+        variantId: variant.id,
+        productName: product.name,
+        variantName: variant.name || "Standard",
         unitPrice,
-        costPrice,
-        quantity: item.quantity as number,
+        costPrice: product.costPrice || 0,
+        quantity,
         lineTotal,
-        image: (item.image as string) || null,
-      };
-    });
+        image: variant.images?.[0] || product.images?.[0] || null,
+      });
+    }
+
+    // Razorpay minimum is ₹1 (100 paise)
+    if (subtotal < 100) return badRequest("Order total is too low");
 
     const orderNumber = generateOrderNumber();
     const now = new Date().toISOString();
@@ -153,10 +219,10 @@ export async function POST(request: Request) {
         orderNumber,
         channel,
         status: "PENDING_PAYMENT",
-        customerName: customer_name,
-        customerPhone: customer_phone,
-        customerEmail: customer_email || null,
-        shippingAddress: shipping_address,
+        customerName,
+        customerPhone,
+        customerEmail,
+        shippingAddress,
         subtotal,
         discount: 0,
         total: subtotal,
@@ -167,7 +233,10 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
+    if (orderError) {
+      console.error("[orders/create] Order insert failed:", orderError.message);
+      return NextResponse.json({ error: "Could not create your order. Please try again." }, { status: 500 });
+    }
 
     // ── Insert OrderItems with explicit IDs ─────────────────────────────────
     const itemsData = orderItems.map((item, idx) => ({
@@ -180,7 +249,8 @@ export async function POST(request: Request) {
     if (itemsError) {
       // Rollback: delete the Order if items fail
       await supabaseAdmin.from("Order").delete().eq("id", order.id);
-      return NextResponse.json({ error: itemsError.message }, { status: 500 });
+      console.error("[orders/create] OrderItem insert failed:", itemsError.message);
+      return NextResponse.json({ error: "Could not create your order. Please try again." }, { status: 500 });
     }
 
     // NOTE: Stock decrement and shipment creation are NOT done here.
@@ -200,7 +270,7 @@ export async function POST(request: Request) {
         notes: {
           order_id: order.id,
           order_number: orderNumber,
-          customer_name: customer_name,
+          customer_name: customerName,
         },
       });
 
@@ -242,7 +312,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to create order";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[orders/create] Unexpected error:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
   }
 }
