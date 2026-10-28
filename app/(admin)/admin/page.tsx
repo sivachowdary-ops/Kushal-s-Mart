@@ -1,6 +1,7 @@
 "use client";
 
 import { useAdminStore } from "@/lib/admin-store";
+import { formatDate } from "@/lib/utils";
 import {
   Store,
   PlusCircle,
@@ -22,8 +23,10 @@ export default function AdminDashboardPage() {
     totalNetProfit, 
     ordersToday, 
     products, 
-    lowStockCount, 
+    lowStockCount,
     orders,
+    placedOrders,
+    revenueOrders,
     onlineSalesTotal,
     counterSalesTotal,
     getProductFinancialStats
@@ -83,7 +86,8 @@ export default function AdminDashboardPage() {
     const nextDay = new Date(date);
     nextDay.setDate(date.getDate() + 1);
     
-    const dayOrders = orders.filter(o => {
+    // Revenue chart counts paid orders only — not abandoned, failed, cancelled or refunded ones
+    const dayOrders = revenueOrders.filter(o => {
       const d = new Date(o.created_at);
       return d >= date && d < nextDay;
     });
@@ -97,10 +101,13 @@ export default function AdminDashboardPage() {
   
   const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1); // prevent division by zero
 
-  // Top Products
-  const topProducts = getProductFinancialStats('all').slice(0, 5);
+  // Top Products — sorted by sales (was the first 5 products in catalogue order)
+  const topProducts = getProductFinancialStats('all')
+    .filter((p) => p.unitsSold > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5);
 
-  const recentOrders = [...orders]
+  const recentOrders = [...placedOrders]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 10);
 
@@ -282,12 +289,12 @@ export default function AdminDashboardPage() {
                     </td>
                     <td className="px-6 py-3">
                       <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-700 uppercase">
-                        {order.status.replace('_', ' ')}
+                        {order.status.replaceAll('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-3 font-medium text-gray-900">{formatPrice(order.total)}</td>
                     <td className="px-6 py-3 text-gray-500 text-xs">
-                      {new Date(order.created_at).toLocaleDateString('en-IN')}
+                      {formatDate(order.created_at)}
                     </td>
                   </tr>
                 )) : (

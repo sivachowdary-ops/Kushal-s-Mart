@@ -298,7 +298,15 @@ export default function TrackOrderPage() {
 
             // Map individual scan to correct status label
             let scanStatus = "PACKED";
-            if (instruction.includes("delivered") || scanType === "dl") {
+            // "Undelivered" / "Not delivered" contain the word "delivered" — check them first
+            if (
+              instruction.includes("undelivered") ||
+              instruction.includes("not delivered") ||
+              instruction.includes("rto") ||
+              instruction.includes("return")
+            ) {
+              scanStatus = "ACTION_REQUIRED";
+            } else if (instruction.includes("delivered") || scanType === "dl") {
               scanStatus = "DELIVERED";
             } else if (instruction.includes("out for delivery") || scanType === "od") {
               scanStatus = "OUT_FOR_DELIVERY";
@@ -368,14 +376,20 @@ export default function TrackOrderPage() {
       setPhone(digits);
       setIsLoading(true);
       fetch(`/api/track-orders?phone=${digits}`)
-        .then((r) => r.json())
+        .then(async (r) => {
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+          return data;
+        })
         .then(async (data) => {
           const raw = data.orders || [];
           const enriched = await enrichWithLiveTracking(raw);
           setOrders(enriched);
           setHasSearched(true);
         })
-        .catch(() => setError("Network error. Please try again."))
+        .catch((err: unknown) =>
+          setError(err instanceof Error && err.message ? err.message : "Network error. Please try again.")
+        )
         .finally(() => setIsLoading(false));
     }
   }, []);

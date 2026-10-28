@@ -24,6 +24,8 @@ export async function GET(request: Request) {
     .select("id, orderNumber, shiprocketAwb, status")
     .not("shiprocketAwb", "is", null)
     .not("status", "in", '("DELIVERED","CANCELLED","COMPLETED")')
+    // Least recently updated first, so every shipment gets its turn when there are more than 50
+    .order("updatedAt", { ascending: true })
     .limit(50);
 
   if (error) {

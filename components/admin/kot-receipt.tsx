@@ -162,8 +162,51 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
 }
 
 /**
- * Trigger print for thermal KOT receipt.
+ * Prints only the KOT receipt on screen, in its own window sized for thermal paper.
+ * (window.print() on the POS page printed the whole register — product grid and all.)
  */
-export function printKot() {
-  window.print();
+export function printKot(paperSize: "58mm" | "80mm" = "58mm") {
+  const areas = document.querySelectorAll<HTMLElement>(".kot-print-area");
+  const printArea = areas[areas.length - 1]; // the receipt in the topmost (latest) modal
+  if (!printArea) {
+    window.print();
+    return;
+  }
+
+  const printWin = window.open("", "_blank", "width=420,height=700");
+  if (!printWin) {
+    // Pop-up blocked — fall back to printing the page
+    window.print();
+    return;
+  }
+
+  // Reuse the app's stylesheets so the receipt looks exactly like the preview
+  const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((node) => node.outerHTML)
+    .join("\n");
+  const width = paperSize === "58mm" ? "48mm" : "72mm";
+
+  printWin.document.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>KOT Receipt</title>
+    <base href="${window.location.origin}/" />
+    ${styles}
+    <style>
+      body { margin: 0; padding: 8px; background: #fff; display: flex; justify-content: center; }
+      .kot-print-area { width: ${width}; max-width: ${width} !important; }
+      @page { size: auto; margin: 3mm; }
+    </style>
+  </head>
+  <body>${printArea.outerHTML.replace(/<script[\s\S]*?<\/script>/gi, "")}</body>
+</html>`);
+  printWin.document.close();
+  const doPrint = () => {
+    printWin.focus();
+    printWin.print();
+  };
+  // Wait for stylesheets before printing
+  if (printWin.document.readyState === "complete") doPrint();
+  else printWin.onload = doPrint;
 }

@@ -1,12 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck, Plus, Minus } from "lucide-react";
-import { useCart } from "@/lib/cart-context";
+import { useCart, getMaxQuantity } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
+import { CartNotice } from "@/components/storefront/cart-notice";
 
 export default function CartPage() {
-  const { cartItems, cartCount, subtotal, updateQuantity, removeFromCart } = useCart();
+  const { cartItems, cartCount, subtotal, updateQuantity, removeFromCart, isLoaded, syncCartWithCatalog } = useCart();
+
+  // Refresh prices and stock — the saved cart may be days old
+  useEffect(() => {
+    if (isLoaded) syncCartWithCatalog();
+  }, [isLoaded, syncCartWithCatalog]);
 
   return (
     <div className="bg-[#F4F5F7] min-h-screen pb-16">
@@ -19,7 +26,8 @@ export default function CartPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <CartNotice />
         {cartItems.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
@@ -74,7 +82,9 @@ export default function CartPage() {
                       </span>
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-gray-700 shadow-xs hover:bg-gray-100"
+                        disabled={item.quantity >= getMaxQuantity(item)}
+                        aria-label="Increase quantity"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-gray-700 shadow-xs hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>

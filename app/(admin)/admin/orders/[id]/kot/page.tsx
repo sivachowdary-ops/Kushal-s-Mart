@@ -45,7 +45,7 @@ export default function OrderKotPage({ params }: { params: Promise<{ id: string 
     customerName: order.customer_name || "Guest Customer",
     customerPhone: order.customer_phone || "N/A",
     customerEmail: order.customer_email || undefined,
-    shippingAddress: order.shipping_address as { address: string; city: string; state: string; pincode: string } | undefined,
+    shippingAddress: (order.shipping_address || undefined) as { address: string; city: string; state: string; pincode: string } | undefined,
     items: items.map((i) => ({
       productName: i.product_name,
       variantName: i.variant_name || "Standard",
@@ -61,62 +61,7 @@ export default function OrderKotPage({ params }: { params: Promise<{ id: string 
     createdAt: order.created_at,
   };
 
-  const handlePrintOrPdf = () => {
-    const printArea = document.querySelector(".kot-print-area");
-    if (!printArea) {
-      window.print();
-      return;
-    }
-
-    // Open dedicated print window for reliable PDF rendering
-    const printWin = window.open("", "_blank", "width=600,height=700");
-    if (printWin) {
-      printWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>KOT_Receipt_${order.order_number}</title>
-            <style>
-              body {
-                font-family: monospace;
-                margin: 0;
-                padding: 10px;
-                display: flex;
-                justify-content: center;
-                color: #000;
-              }
-              .receipt-wrap {
-                width: ${paperSize === "58mm" ? "48mm" : "72mm"};
-                font-size: ${paperSize === "58mm" ? "10px" : "12px"};
-                line-height: 1.3;
-              }
-              .text-center { text-align: center; }
-              .font-bold { font-weight: bold; }
-              .border-b { border-bottom: 1px dashed #666; }
-              .flex { display: flex; justify-content: space-between; }
-              .py-1 { padding-top: 4px; padding-bottom: 4px; }
-              .my-2 { margin-top: 8px; margin-bottom: 8px; }
-              @page { size: auto; margin: 3mm; }
-            </style>
-          </head>
-          <body>
-            <div class="receipt-wrap">
-              ${(printArea.innerHTML || "").replace(/<script[\s\S]*?<\/script>/gi, "")}
-            </div>
-            <script>
-              window.onload = function() {
-                window.focus();
-                window.print();
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      printWin.document.close();
-    } else {
-      window.print();
-    }
-  };
+  const handlePrintOrPdf = () => printKot(paperSize);
 
   return (
     <div className="min-h-screen bg-[#F4F5F7] pb-12">

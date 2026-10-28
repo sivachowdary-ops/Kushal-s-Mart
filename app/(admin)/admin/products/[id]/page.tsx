@@ -149,7 +149,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }, 900);
     } catch (error) {
       console.error(error);
-      alert("Failed to update product");
+      alert(error instanceof Error ? error.message : "Failed to update product");
     } finally {
       setIsSubmitting(false);
     }

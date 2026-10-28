@@ -41,6 +41,14 @@ export async function POST(
       );
     }
 
+    // Never create a courier shipment for an order that hasn't been paid
+    if (!["PAID", "PARTIALLY_REFUNDED"].includes(order.payment_status)) {
+      return NextResponse.json(
+        { error: `Order is not paid (payment status: ${order.payment_status || "PENDING"}) — not dispatching.` },
+        { status: 400 }
+      );
+    }
+
     const shippingAddress = order.shipping_address as {
       address?: string;
       city?: string;

@@ -42,6 +42,23 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { items, ...orderBody } = body;
 
+    // Validate lines before creating anything — a negative quantity would add stock back
+    if (items !== undefined) {
+      if (!Array.isArray(items)) {
+        return NextResponse.json({ error: "items must be an array" }, { status: 400 });
+      }
+      for (const item of items as Record<string, unknown>[]) {
+        const qty = item?.quantity;
+        const price = item?.unit_price;
+        if (typeof qty !== "number" || !Number.isInteger(qty) || qty < 1 || qty > 999) {
+          return NextResponse.json({ error: "Each item needs a whole-number quantity of at least 1" }, { status: 400 });
+        }
+        if (typeof price !== "number" || !Number.isInteger(price) || price < 0) {
+          return NextResponse.json({ error: "Each item needs a valid price" }, { status: 400 });
+        }
+      }
+    }
+
     const now = new Date().toISOString();
     const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -121,30 +138,31 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: itemsError.message }, { status: 500 });
       }
 
-      // Deduct stock for POS sales
+      // Deduct stock for POS sales — atomic RPC, so a simultaneous online sale can't be lost
       for (const oi of itemsData) {
         if (oi.variantId && oi.variantId !== "default") {
           try {
-            const { data: v } = await supabaseAdmin
-              .from("ProductVariant")
-              .select("stock")
-              .eq("id", oi.variantId)
-              .single();
-            if (v) {
-              const newStock = Math.max(0, (v.stock || 0) - (oi.quantity as number));
-              await supabaseAdmin
-                .from("ProductVariant")
-                .update({ stock: newStock })
-                .eq("id", oi.variantId);
-
-              await supabaseAdmin.from("StockLedgerEntry").insert([{
-                id: `stk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-                variantId: oi.variantId,
-                change: -(oi.quantity as number),
-                reason: "POS_SALE",
-                referenceId: dbOrder.orderNumber || order.order_number,
-              }]);
+            const qty = oi.quantity as number;
+            const { data: decremented, error: rpcErr } = await supabaseAdmin.rpc("decrement_stock", {
+              p_variant_id: oi.variantId,
+              p_qty: qty,
+            });
+            if (rpcErr) throw rpcErr;
+            if (decremented === false) {
+              // The item was physically sold, so the recorded stock was wrong — floor it at zero
+              console.warn(`[POS] Stock for ${oi.variantId} was below ${qty}; setting to 0`);
+              await supabaseAdmin.from("ProductVariant").update({ stock: 0 }).eq("id", oi.variantId);
             }
+
+            await supabaseAdmin.from("StockLedgerEntry").insert([{
+              id: `stk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+              variantId: oi.variantId,
+              change: -qty,
+              reason: "OFFLINE_SALE",
+              orderId: order.id,
+              note: `POS sale ${dbOrder.orderNumber}`,
+              createdAt: now,
+            }]);
           } catch (stkErr) {
             console.warn("Stock decrement warning for POS sale", oi.variantId, stkErr);
           }

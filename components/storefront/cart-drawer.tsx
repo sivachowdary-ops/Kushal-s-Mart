@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { X, Trash2, ShoppingBag, Plus, Minus, ArrowRight, ShieldCheck } from "lucide-react";
-import { useCart } from "@/lib/cart-context";
+import { useCart, getMaxQuantity } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
+import { CartNotice } from "@/components/storefront/cart-notice";
 
 export function CartDrawer() {
   const router = useRouter();
@@ -66,6 +67,7 @@ export function CartDrawer() {
 
           {/* Drawer Content Body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <CartNotice />
             {cartItems.length > 0 ? (
               cartItems.map((item) => (
                 <div
@@ -111,7 +113,9 @@ export function CartDrawer() {
                         </span>
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="flex h-6 w-6 items-center justify-center rounded-lg bg-white text-gray-700 shadow-xs hover:bg-gray-100"
+                          disabled={item.quantity >= getMaxQuantity(item)}
+                          aria-label="Increase quantity"
+                          className="flex h-6 w-6 items-center justify-center rounded-lg bg-white text-gray-700 shadow-xs hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Plus className="h-3 w-3" />
                         </button>

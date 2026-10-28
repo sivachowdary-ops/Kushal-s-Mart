@@ -75,21 +75,27 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     }
 
     setIsLoading(true);
+    // Ignore responses for queries the user has already typed past — otherwise a slow
+    // response for "ho" can overwrite the results for "hot wheels"
+    let isStale = false;
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/storefront/products?q=${encodeURIComponent(trimmed)}`);
-        if (res.ok) {
+        if (res.ok && !isStale) {
           const data = await res.json();
-          setResults(data.products || []);
+          if (!isStale) setResults(data.products || []);
         }
       } catch (err) {
         console.error("Search fetch error:", err);
       } finally {
-        setIsLoading(false);
+        if (!isStale) setIsLoading(false);
       }
     }, 200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isStale = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const handleSelectProduct = (slug: string) => {

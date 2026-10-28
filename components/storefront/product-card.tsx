@@ -38,25 +38,31 @@ export function ProductCard({
   const { addToCart } = useCart();
   const [isAdded, setIsAdded] = useState(false);
   const displayImage = imageUrl || (images && images[0]) || undefined;
-  const calcDiscount = mrp && mrp > sellingPrice
-    ? Math.round(((mrp - sellingPrice) / mrp) * 100)
-    : discountPercent || 0;
   const isSoldOut = typeof totalStock === "number" && totalStock <= 0;
+
+  // Quick-add uses the first variant that is actually in stock, and the card shows its price,
+  // so the price on the card always matches what goes into the cart.
+  const quickAddVariant =
+    variants.find((v) => typeof v.stock !== "number" || v.stock > 0) || variants[0] || null;
+  const displayPrice = quickAddVariant?.selling_price_override ?? sellingPrice;
+  const calcDiscount = mrp && mrp > displayPrice
+    ? Math.round(((mrp - displayPrice) / mrp) * 100)
+    : discountPercent || 0;
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (isSoldOut) return;
-    const firstVariant = variants && variants.length > 0 ? variants[0] : null;
     addToCart({
       productId: id || slug,
       slug,
       name,
-      variantId: firstVariant?.id || "default",
-      variantName: firstVariant?.name || "Standard",
-      price: firstVariant?.selling_price_override ?? sellingPrice,
+      variantId: quickAddVariant?.id || "default",
+      variantName: quickAddVariant?.name || "Standard",
+      price: displayPrice,
       image: displayImage || "",
       quantity: 1,
+      maxStock: typeof quickAddVariant?.stock === "number" ? quickAddVariant.stock : undefined,
     });
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -136,9 +142,9 @@ export function ProductCard({
         {/* Price Row */}
         <div className="flex flex-wrap items-baseline gap-1 sm:gap-2 mb-2 sm:mb-4">
           <span className="font-extrabold text-base sm:text-2xl text-gray-900 tracking-tight">
-            {formatPrice(sellingPrice)}
+            {formatPrice(displayPrice)}
           </span>
-          {mrp && mrp > sellingPrice && (
+          {mrp && mrp > displayPrice && (
             <span className="text-[10px] sm:text-xs font-medium text-gray-400 line-through">
               {formatPrice(mrp)}
             </span>

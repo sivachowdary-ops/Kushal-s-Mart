@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAdminStore, AdminProduct, AdminVariant, AdminOrder } from "@/lib/admin-store";
 import { supabase } from "@/lib/supabase-client";
+import { formatDateShort, formatTime } from "@/lib/utils";
 import { checkAuthLockout, recordFailedAuthAttempt, resetAuthAttempts } from "@/lib/auth-rate-limit";
 import {
   Search,
@@ -37,8 +38,18 @@ interface CartItem {
   quantity: number;
 }
 
+function getVariants(product: AdminProduct): AdminVariant[] {
+  return product.variants?.length ? product.variants : product.product_variants || [];
+}
+
+/** Variant price override wins over the product price — same rule as the online store. */
+function unitPriceFor(item: Pick<CartItem, "product" | "variant">): number {
+  return item.variant.selling_price_override ?? item.product.selling_price;
+}
+
 export default function StandalonePOSPage() {
-  const { products, categories, orders, isLoading, refreshProducts, refreshOrders, addOrder } = useAdminStore();
+  const { products, categories, placedOrders: orders, isLoading, refreshProducts, refreshOrders, addOrder } = useAdminStore();
+  const [variantPickerProduct, setVariantPickerProduct] = useState<AdminProduct | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("ALL");
@@ -50,7 +61,7 @@ export default function StandalonePOSPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Multi-Store Branch & Staff 2FA State
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("kochi-flagship");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(STORE_BRANCHES[0].id);
   const [isRegisterUnlocked, setIsRegisterUnlocked] = useState<boolean>(false);
   const [cashierName, setCashierName] = useState<string>("Store Cashier");
 
@@ -202,6 +213,9 @@ export default function StandalonePOSPage() {
     paymentMode: string;
     itemsCount: number;
     storeBranch?: string;
+    customerName: string;
+    customerPhone: string;
+    createdAt: string;
     items?: Array<{
       productName: string;
       variantName: string;
@@ -222,38 +236,46 @@ export default function StandalonePOSPage() {
     return matchesSearch && matchesCategory;
   });
 
-  const addToCart = (product: AdminProduct) => {
-    const realVariant = product.variants?.[0] || product.product_variants?.[0];
-    const variant: AdminVariant = realVariant || {
-      id: "",
-      product_id: product.id,
-      name: "Default",
-      sku: `sku-${product.id}`,
-      stock: 99,
-      selling_price_override: null,
-      mrp_override: null,
-      low_stock_threshold: 5,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  /** Clicking a product: one variant → add it; several → let the cashier pick the colour/option. */
+  const handleProductClick = (product: AdminProduct) => {
+    const inStock = getVariants(product).filter((v) => v.stock > 0);
+    if (inStock.length === 0) return;
+    if (getVariants(product).length > 1) {
+      setVariantPickerProduct(product);
+      return;
+    }
+    addToCart(product, inStock[0]);
+  };
+
+  // Cart lines are per variant, so the right colour's stock goes down and its price is charged
+  const addToCart = (product: AdminProduct, variant: AdminVariant) => {
+    const inCart = cart.find((item) => item.variant.id === variant.id)?.quantity ?? 0;
+    if (inCart >= variant.stock) {
+      showToast(`Only ${variant.stock} of "${product.name}" (${variant.name}) in stock`);
+      return;
+    }
+
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => item.variant.id === variant.id);
       if (existing) {
-        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map(item => item.variant.id === variant.id ? { ...item, quantity: item.quantity + 1 } : item);
       }
       return [...prev, { product, variant, quantity: 1 }];
     });
 
-    setToastMessage(`Added "${product.name}" to counter order`);
-    setTimeout(() => setToastMessage(null), 2500);
+    showToast(`Added "${product.name}"${getVariants(product).length > 1 ? ` (${variant.name})` : ""} to counter order`);
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (variantId: string, delta: number) => {
     setCart(prev => {
       return prev.map(item => {
-        if (item.product.id === productId) {
-          const newQuantity = Math.max(0, item.quantity + delta);
+        if (item.variant.id === variantId) {
+          const newQuantity = Math.min(item.variant.stock, Math.max(0, item.quantity + delta));
           return { ...item, quantity: newQuantity };
         }
         return item;
@@ -261,14 +283,15 @@ export default function StandalonePOSPage() {
     });
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.selling_price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (unitPriceFor(item) * item.quantity), 0);
   const discount = 0;
   const total = subtotal - discount;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    if (!customerPhone) {
-      alert("Customer phone is required for digital invoice");
+    const phoneDigits = customerPhone.replace(/\D/g, "").slice(-10);
+    if (!/^[6-9]\d{9}$/.test(phoneDigits)) {
+      alert("Please enter the customer's 10-digit mobile number.");
       return;
     }
 
@@ -277,9 +300,10 @@ export default function StandalonePOSPage() {
       const orderData = {
         channel: "OFFLINE" as const,
         status: "COMPLETED" as const,
-        customer_name: customerName || "Walk-in Customer",
-        customer_phone: customerPhone,
-        customer_email: posEmail ? posEmail.trim() : null,
+        customer_name: customerName.trim() || "Walk-in Customer",
+        customer_phone: phoneDigits,
+        // Walk-in sales don't collect an email (this used to save the cashier's own login email)
+        customer_email: null,
         shipping_address: null,
         subtotal,
         discount,
@@ -293,9 +317,9 @@ export default function StandalonePOSPage() {
         variant_id: item.variant.id || null,
         product_name: item.product.name,
         variant_name: item.variant.name || "Default",
-        unit_price: item.product.selling_price,
+        unit_price: unitPriceFor(item),
         quantity: item.quantity,
-        line_total: item.product.selling_price * item.quantity,
+        line_total: unitPriceFor(item) * item.quantity,
       }));
 
       const newOrder = await addOrder(orderData, orderItemsData);
@@ -309,6 +333,9 @@ export default function StandalonePOSPage() {
           paymentMode,
           itemsCount: cart.reduce((acc, curr) => acc + curr.quantity, 0),
           storeBranch: selectedBranchId,
+          customerName: orderData.customer_name,
+          customerPhone: orderData.customer_phone,
+          createdAt: newOrder.created_at || new Date().toISOString(),
           items: orderItemsData.map((oi) => ({
             productName: oi.product_name,
             variantName: oi.variant_name,
@@ -320,6 +347,7 @@ export default function StandalonePOSPage() {
         setCart([]);
         setCustomerName("");
         setCustomerPhone("");
+        refreshProducts(); // stock counts changed
       } else {
         alert("Failed to create order. Please check your staff login session.");
       }
@@ -574,14 +602,16 @@ export default function StandalonePOSPage() {
         <div className="flex-1 overflow-y-auto min-h-0 pr-1">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3 sm:gap-4 pb-6">
             {filteredProducts.map((product) => {
-              const mainVariant = product.variants?.[0] || product.product_variants?.[0];
-              const stock = mainVariant?.stock ?? 0;
+              const variants = getVariants(product);
+              // Total across all colours — a sold-out first colour no longer hides the others
+              const stock = variants.reduce((sum, v) => sum + Math.max(0, v.stock || 0), 0);
               const isOutOfStock = stock <= 0;
+              const optionCount = variants.length;
 
               return (
                 <div
                   key={product.id}
-                  onClick={() => !isOutOfStock && addToCart(product)}
+                  onClick={() => !isOutOfStock && handleProductClick(product)}
                   className={`flex flex-col justify-between rounded-2xl border bg-white p-3 shadow-xs transition-all ${
                     isOutOfStock
                       ? "opacity-60 border-gray-200 cursor-not-allowed"
@@ -608,6 +638,9 @@ export default function StandalonePOSPage() {
                     <div className="font-bold text-xs sm:text-sm text-gray-900 line-clamp-2 leading-snug">
                       {product.name}
                     </div>
+                    {optionCount > 1 && (
+                      <div className="text-[10px] font-bold text-gray-500 mt-0.5">{optionCount} options — tap to choose</div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
@@ -658,32 +691,38 @@ export default function StandalonePOSPage() {
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.product.id} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-200/60 gap-3">
+              <div key={item.variant.id} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-200/60 gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-xs text-gray-900 truncate">{item.product.name}</div>
+                  {getVariants(item.product).length > 1 && (
+                    <div className="text-[11px] font-bold text-gray-700 truncate">{item.variant.name}</div>
+                  )}
                   <div className="text-[11px] font-semibold text-gray-500">
-                    ₹{(item.product.selling_price / 100).toLocaleString("en-IN")} each
+                    ₹{(unitPriceFor(item) / 100).toLocaleString("en-IN")} each
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <div className="flex items-center bg-white rounded-xl border border-gray-200 shadow-2xs">
                     <button
-                      onClick={() => updateQuantity(item.product.id, -1)}
+                      onClick={() => updateQuantity(item.variant.id, -1)}
+                      aria-label="Decrease quantity"
                       className="p-1 text-gray-600 hover:text-red-600 transition-colors"
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </button>
                     <span className="w-6 text-center text-xs font-bold text-gray-900">{item.quantity}</span>
                     <button
-                      onClick={() => updateQuantity(item.product.id, 1)}
-                      className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
+                      onClick={() => updateQuantity(item.variant.id, 1)}
+                      disabled={item.quantity >= item.variant.stock}
+                      aria-label="Increase quantity"
+                      className="p-1 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <span className="font-black text-xs text-gray-900 w-16 text-right">
-                    ₹{((item.product.selling_price * item.quantity) / 100).toLocaleString("en-IN")}
+                    ₹{((unitPriceFor(item) * item.quantity) / 100).toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -748,6 +787,63 @@ export default function StandalonePOSPage() {
         </div>
       </div>
 
+      {/* Variant (colour / option) Picker */}
+      {variantPickerProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-xs"
+          onClick={() => setVariantPickerProduct(null)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl p-5 sm:p-6 max-w-md w-full border border-gray-100 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Choose option</p>
+                <h3 className="font-extrabold text-base text-gray-900 leading-snug">{variantPickerProduct.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVariantPickerProduct(null)}
+                aria-label="Close"
+                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {getVariants(variantPickerProduct).map((variant) => {
+                const inCart = cart.find((item) => item.variant.id === variant.id)?.quantity ?? 0;
+                const available = variant.stock - inCart;
+                const price = unitPriceFor({ product: variantPickerProduct, variant });
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    disabled={available <= 0}
+                    onClick={() => {
+                      addToCart(variantPickerProduct, variant);
+                      setVariantPickerProduct(null);
+                    }}
+                    className="w-full flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-3 text-left hover:border-gray-900 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-gray-900 truncate">{variant.name}</div>
+                      <div className={`text-[11px] font-bold ${variant.stock > 0 ? "text-gray-500" : "text-red-600"}`}>
+                        {variant.stock > 0 ? `${variant.stock} in stock${inCart > 0 ? ` · ${inCart} in cart` : ""}` : "Out of stock"}
+                      </div>
+                    </div>
+                    <span className="font-black text-sm text-gray-900 shrink-0">
+                      ₹{(price / 100).toLocaleString("en-IN")}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sale Complete Pop-up Modal with KOT Receipt */}
       {completedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-xs">
@@ -779,10 +875,30 @@ export default function StandalonePOSPage() {
               </div>
             </div>
 
+            {/* The slip that "Print KOT Slip" prints */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 max-h-[40vh] overflow-y-auto text-left">
+              <KotReceipt
+                order={{
+                  orderNumber: completedOrder.orderNumber,
+                  channel: "OFFLINE",
+                  customerName: completedOrder.customerName,
+                  customerPhone: completedOrder.customerPhone,
+                  items: completedOrder.items || [],
+                  subtotal: completedOrder.total,
+                  discount: 0,
+                  total: completedOrder.total,
+                  paymentStatus: "PAID",
+                  paymentMode: completedOrder.paymentMode,
+                  createdAt: completedOrder.createdAt,
+                }}
+                storeBranchId={completedOrder.storeBranch}
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
-                onClick={printKot}
+                onClick={() => printKot()}
                 className="flex-1 rounded-xl bg-gray-900 hover:bg-black text-white py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md"
               >
                 <Printer className="h-4 w-4" />
@@ -982,10 +1098,7 @@ export default function StandalonePOSPage() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3 text-slate-400" />
-                                {new Date(order.created_at).toLocaleTimeString("en-IN", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {formatTime(order.created_at)}
                               </span>
                             </div>
                           </div>
@@ -1023,7 +1136,7 @@ export default function StandalonePOSPage() {
                         <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                           <span className="text-[11px] text-slate-400 font-medium">
                             {itemsCount} {itemsCount === 1 ? "item" : "items"} ·{" "}
-                            {new Date(order.created_at).toLocaleDateString("en-IN")}
+                            {formatDateShort(order.created_at)}
                           </span>
                           <button
                             type="button"
@@ -1090,7 +1203,7 @@ export default function StandalonePOSPage() {
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
-                onClick={printKot}
+                onClick={() => printKot()}
                 className="flex-1 rounded-xl bg-gray-900 hover:bg-black text-white py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
               >
                 <Printer className="h-4 w-4" />

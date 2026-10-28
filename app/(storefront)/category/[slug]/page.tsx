@@ -107,6 +107,12 @@ export default async function CategoryDetailPage({
       badgeType: (discountPercent >= 25 ? "DEALS" : "SAVE") as "DEALS" | "SAVE",
       inStock,
       totalStock,
+      variants: variants.map((v) => ({
+        id: v.id as string,
+        name: v.name as string,
+        stock: (v.stock as number) || 0,
+        selling_price_override: (v.sellingPriceOverride as number | null) ?? null,
+      })),
     };
   });
 
@@ -188,6 +194,7 @@ export default async function CategoryDetailPage({
                 discountPercent={product.discount_percent}
                 badgeType={product.discount_percent >= 30 ? "DEALS" : "SAVE"}
                 totalStock={product.totalStock}
+                variants={product.variants}
               />
             ))}
           </div>

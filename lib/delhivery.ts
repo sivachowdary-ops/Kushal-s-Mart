@@ -329,22 +329,17 @@ export async function getDelhiveryTrackingStatus(
   const token = process.env.DELHIVERY_API_TOKEN?.trim();
   const baseUrl = getDelhiveryBaseUrl();
 
-  // If no token, return clean simulated/fallback tracking info
+  // No token → say so. This used to return made-up "Manifested at Kochi Hub" scans, which
+  // customers saw as real tracking and which hid a missing DELHIVERY_API_TOKEN.
   if (!token) {
+    console.error("[Delhivery Tracking] DELHIVERY_API_TOKEN is not configured — live tracking unavailable");
     return {
-      success: true,
+      success: false,
       waybill: cleanAwb,
-      currentStatus: "Manifested",
+      currentStatus: "UNKNOWN",
       currentStage: "PACKED",
-      statusDetails: "Shipment booked with Delhivery Express. Awaiting pickup scan.",
-      scans: [
-        {
-          scanType: "MANIFESTED",
-          scanDateTime: new Date().toISOString(),
-          scannedLocation: "Kochi Hub",
-          instructions: "Shipment created",
-        },
-      ],
+      error: "Live tracking is temporarily unavailable",
+      scans: [],
     };
   }
 
@@ -371,7 +366,18 @@ export async function getDelhiveryTrackingStatus(
     let stage: DelhiveryTrackingStage["stage"] = "PACKED";
     const statusLower = rawStatus.toLowerCase();
 
-    if (statusLower.includes("delivered")) {
+    // "Undelivered", "Not Delivered" and RTO ("returned to origin … delivered") all contain
+    // "delivered" — they must not mark the order as delivered to the customer.
+    const isFailedOrReturn =
+      statusLower.includes("undelivered") ||
+      statusLower.includes("not delivered") ||
+      statusLower.includes("rto") ||
+      statusLower.includes("return") ||
+      rawType === "RT";
+
+    if (isFailedOrReturn) {
+      stage = "SHIPPED";
+    } else if (statusLower.includes("delivered") || rawType === "DL") {
       stage = "DELIVERED";
     } else if (statusLower.includes("out for delivery") || statusLower.includes("dispatched for delivery")) {
       stage = "OUT_FOR_DELIVERY";

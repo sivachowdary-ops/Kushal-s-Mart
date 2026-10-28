@@ -13,7 +13,11 @@ export async function GET(request: Request) {
   const timeframe = searchParams.get("timeframe") || "all";
 
   try {
-    let query = supabaseAdmin.from("Order").select(`*, OrderItem ( * )`);
+    // Only real sales: unpaid / failed checkouts and cancelled orders are not revenue
+    let query = supabaseAdmin
+      .from("Order")
+      .select(`*, OrderItem ( * )`)
+      .not("status", "in", "(PENDING_PAYMENT,PAYMENT_FAILED,CANCELLED)");
 
     if (timeframe !== "all") {
       const date = new Date();

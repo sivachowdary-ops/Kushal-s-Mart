@@ -96,7 +96,7 @@ export default function CategoriesPage() {
       handleCloseModal();
     } catch (err) {
       console.error(err);
-      alert("Failed to save category. Check console for details.");
+      alert(err instanceof Error ? err.message : "Failed to save category.");
     } finally {
       setIsSaving(false);
     }
@@ -110,7 +110,7 @@ export default function CategoriesPage() {
         setTimeout(() => setToastMessage(null), 3000);
       } catch (err) {
         console.error(err);
-        alert("Failed to delete category.");
+        alert(err instanceof Error ? err.message : "Failed to delete category.");
       }
     }
   };

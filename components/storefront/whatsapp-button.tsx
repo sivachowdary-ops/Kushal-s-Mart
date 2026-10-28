@@ -1,5 +1,7 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 /**
  * Floating WhatsApp Support Widget — Exact YouCliq style matching Screenshots 1, 2 & 3:
  * - Dark navy pill container (#111625) with soft shadow
@@ -7,13 +9,21 @@
  * - "LIVE SUPPORT" / "WHATSAPP" uppercase text
  */
 export function WhatsAppButton() {
+  const pathname = usePathname();
   const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "917288907757";
   const PREBUILT_MESSAGE = encodeURIComponent(
     "Hi Kushal's Mart, I need help with a product.\n\nProduct Link: "
   );
 
+  // On mobile, product pages have a sticky "Add to Cart / Buy It Now" bar at the bottom;
+  // lift the button above it so it doesn't cover "Buy It Now".
+  const hasStickyBuyBar = pathname?.startsWith("/product/");
+
   return (
-    <aside aria-label="Live Support" className="fixed bottom-6 right-6 z-50">
+    <aside
+      aria-label="Live Support"
+      className={`fixed right-6 z-50 ${hasStickyBuyBar ? "bottom-24 lg:bottom-6" : "bottom-6"}`}
+    >
       <a
         href={`https://wa.me/${WHATSAPP_NUMBER}?text=${PREBUILT_MESSAGE}`}
         target="_blank"

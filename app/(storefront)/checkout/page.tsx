@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ShieldCheck, Lock, Truck, ArrowLeft, ShoppingBag, CreditCard, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
+import { saveOrderSummary } from "@/lib/order-summary";
+import { CartNotice } from "@/components/storefront/cart-notice";
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -49,9 +51,14 @@ const INDIAN_STATES = [
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { cartItems, subtotal, clearCart, isLoaded } = useCart();
+  const { cartItems, subtotal, clearCart, isLoaded, syncCartWithCatalog } = useCart();
 
   const isBuyNow = searchParams.get("buyNow") === "1";
+
+  // Re-price the saved cart before the customer sees the total — it may be days old
+  useEffect(() => {
+    if (isLoaded && !isBuyNow) syncCartWithCatalog();
+  }, [isLoaded, isBuyNow, syncCartWithCatalog]);
 
   // Express checkout item (if arriving from "Buy It Now")
   const expressItem = useMemo(() => {
@@ -176,6 +183,27 @@ function CheckoutContent() {
 
       const { order_id: orderId, order_number: orderNumber } = orderData;
       router.prefetch(`/order/${orderNumber}`);
+
+      // The confirmation page shows this summary — order details are not served publicly by order number
+      saveOrderSummary({
+        orderNumber,
+        total: orderData.amount,
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
+        shippingAddress: {
+          address: formData.address.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          pincode: formData.pincode.trim(),
+        },
+        items: activeItems.map((item) => ({
+          name: item.name,
+          variantName: item.variantName,
+          quantity: item.quantity,
+          price: item.price,
+          image: item.image,
+        })),
+      });
       let razorpayOrderId = orderData.razorpay_order_id;
       let amount = orderData.amount;
       let currency = orderData.currency || "INR";
@@ -429,6 +457,8 @@ function CheckoutContent() {
                 </div>
               </div>
             )}
+
+            {!isBuyNow && <CartNotice />}
 
             {errorMessage && !paymentFailedInfo?.failed && (
               <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 border border-red-200">

@@ -148,8 +148,27 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
+  // Products that appear in orders must be kept for order history. Check first — deleting the
+  // variants and then failing on the product left it in the catalogue with no variants.
+  const { count: orderCount, error: countErr } = await supabaseAdmin
+    .from("OrderItem")
+    .select("id", { count: "exact", head: true })
+    .eq("productId", id);
+  if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 });
+  if ((orderCount ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "This product has existing orders, so it can't be deleted. Edit it and turn off \"Active\" to hide it from the store instead.",
+      },
+      { status: 409 }
+    );
+  }
+
   // Delete variants first (no cascade in Prisma-generated schema)
-  await supabaseAdmin.from("ProductVariant").delete().eq("productId", id);
+  const { error: variantErr } = await supabaseAdmin.from("ProductVariant").delete().eq("productId", id);
+  if (variantErr) return NextResponse.json({ error: variantErr.message }, { status: 500 });
   const { error } = await supabaseAdmin.from("Product").delete().eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

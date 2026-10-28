@@ -63,7 +63,7 @@ function TrackOrderSection() {
                   </button>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1">
-                  <span>Shiprocket live tracking powered</span>
+                  <span>Live Delhivery tracking</span>
                   <Link href="/track-order" className="text-red-400 hover:text-white font-bold inline-flex items-center gap-1">
                     Order details <ArrowRight className="h-3 w-3" />
                   </Link>

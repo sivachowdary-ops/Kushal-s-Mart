@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAdminStore } from "@/lib/admin-store";
+import { formatDateShort, formatTime } from "@/lib/utils";
 import Link from "next/link";
 import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer } from "lucide-react";
 
@@ -17,15 +18,24 @@ export default function OrdersPage() {
   }, [refreshOrders]);
 
   const filteredOrders = orders.filter((o) => {
-    const matchesSearch = 
-      (o.order_number && o.order_number.toLowerCase().includes(search.toLowerCase())) ||
-      (o.customer_name && o.customer_name.toLowerCase().includes(search.toLowerCase()));
-    
+    const q = search.toLowerCase().trim();
+    const qDigits = q.replace(/\D/g, "");
+    const matchesSearch =
+      !q ||
+      (o.order_number && o.order_number.toLowerCase().includes(q)) ||
+      (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
+      (qDigits.length >= 4 && (o.customer_phone || "").replace(/\D/g, "").includes(qDigits));
+
     let matchesStatus = false;
     if (statusFilter === "ALL") {
       matchesStatus = o.status !== "PENDING_PAYMENT" && o.status !== "PAYMENT_FAILED";
     } else if (statusFilter === "NEEDS_SHIPMENT") {
-      matchesStatus = (o.payment_status === "PAID" || o.status === "PAID") && !o.shiprocket_awb;
+      // Counter (POS) sales are handed over in store — they never need a courier
+      matchesStatus =
+        o.channel !== "OFFLINE" &&
+        (o.payment_status === "PAID" || o.status === "PAID") &&
+        !o.shiprocket_awb &&
+        o.status !== "CANCELLED";
     } else {
       matchesStatus = o.status === statusFilter;
     }
@@ -77,7 +87,7 @@ export default function OrdersPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search orders..."
+              placeholder="Search order #, name or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -100,10 +110,11 @@ export default function OrdersPage() {
             >
               <option value="ALL">All Statuses</option>
               <option value="NEEDS_SHIPMENT">📦 Needs Shipment (Paid, No AWB)</option>
+              <option value="PAID">Paid</option>
               <option value="PACKED">Packed (AWB Generated)</option>
               <option value="PENDING">Pending</option>
-              <option value="PENDING_PAYMENT">Pending Payment</option>
-              <option value="PAYMENT_FAILED">Payment Failed</option>
+              <option value="PENDING_PAYMENT">⏳ Unpaid checkouts (not orders yet)</option>
+              <option value="PAYMENT_FAILED">✕ Failed payment attempts</option>
               <option value="PROCESSING">Processing</option>
               <option value="SHIPPED">Shipped</option>
               <option value="DELIVERED">Delivered</option>
@@ -152,11 +163,8 @@ export default function OrdersPage() {
                       {order.order_number}
                     </td>
                     <td className="px-6 py-4">
-                      {new Date(order.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      <div>{formatDateShort(order.created_at)}</div>
+                      <div className="text-xs text-slate-400">{formatTime(order.created_at)}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-slate-900">{order.customer_name || "Guest"}</div>

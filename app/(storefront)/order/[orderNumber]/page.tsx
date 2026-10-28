@@ -4,6 +4,7 @@ import { useEffect, useState, use, useCallback } from "react";
 import Link from "next/link";
 import { CheckCircle2, Package, ArrowRight, Truck, MapPin, ShoppingBag, RotateCcw, Clock, AlertTriangle } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { loadOrderSummary } from "@/lib/order-summary";
 
 interface OrderStatus {
   status: string;
@@ -18,33 +19,21 @@ interface OrderItem {
   product_name: string;
   variant_name: string;
   quantity: number;
-  unit_price: number;
   line_total: number;
   image?: string;
 }
 
 interface FullOrder {
-  id: string;
-  order_number: string;
-  status: string;
-  payment_status: string;
-  payment_mode: string;
   customer_name: string;
   customer_phone: string;
-  customer_email: string;
   shipping_address: {
     address?: string;
     city?: string;
     state?: string;
     pincode?: string;
   } | null;
-  subtotal: number;
-  discount: number;
   total: number;
-  shiprocket_awb: string | null;
-  courier_name: string | null;
   order_items: OrderItem[];
-  created_at: string;
 }
 
 /**
@@ -98,27 +87,25 @@ export default function OrderConfirmationPage({
     }
   }, [orderNumber]);
 
-  // Fetch full order details once payment is confirmed
-  const fetchFullOrder = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/orders/${orderNumber}/status`);
-      if (!res.ok) return;
-
-      // We need the full order for display — but the status endpoint is lightweight.
-      // For the full order with items, let's use the track-orders endpoint which is public.
-      const trackRes = await fetch(`/api/track-orders?phone=&orderNumber=${orderNumber}`);
-      if (trackRes.ok) {
-        const trackData = await trackRes.json();
-        const found = trackData.orders?.find(
-          (o: FullOrder) => o.order_number === orderNumber
-        );
-        if (found) {
-          setFullOrder(found);
-        }
-      }
-    } catch {
-      // Not critical — we still show the confirmed status
-    }
+  // Order details come from the summary checkout saved in this tab (order details are not
+  // public by order number). Opening the link in another browser shows status only.
+  const loadSummary = useCallback(() => {
+    const summary = loadOrderSummary(orderNumber);
+    if (!summary) return;
+    setFullOrder({
+      customer_name: summary.customerName,
+      customer_phone: summary.customerPhone,
+      shipping_address: summary.shippingAddress,
+      total: summary.total,
+      order_items: summary.items.map((item, idx) => ({
+        id: `${orderNumber}-${idx}`,
+        product_name: item.name,
+        variant_name: item.variantName,
+        quantity: item.quantity,
+        line_total: item.price * item.quantity,
+        image: item.image,
+      })),
+    });
   }, [orderNumber]);
 
   // Start polling on mount
@@ -142,12 +129,12 @@ export default function OrderConfirmationPage({
     return () => clearTimeout(timer);
   }, [isPolling, pollCount, pollStatus]);
 
-  // Fetch full order when payment is confirmed
+  // Show order details when payment is confirmed
   useEffect(() => {
     if (orderStatus?.paymentStatus === "PAID") {
-      fetchFullOrder();
+      loadSummary();
     }
-  }, [orderStatus?.paymentStatus, fetchFullOrder]);
+  }, [orderStatus?.paymentStatus, loadSummary]);
 
   // ── Error state ─────────────────────────────────────────────────────────
   if (error) {
@@ -227,7 +214,8 @@ export default function OrderConfirmationPage({
               </h1>
               <p className="text-sm text-gray-500 mt-2">
                 Unfortunately, your payment could not be completed.
-                Don&apos;t worry — no money has been charged.
+                If any amount was debited, it will be confirmed automatically or refunded by your bank —
+                please check Track Order before paying again.
               </p>
             </div>
             <p className="text-xs text-gray-400 font-semibold">
@@ -342,16 +330,6 @@ export default function OrderConfirmationPage({
               {/* Totals */}
               {order && (
                 <div className="border-t border-gray-200 pt-3 space-y-1.5 text-xs font-semibold">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(order.subtotal)}</span>
-                  </div>
-                  {order.discount > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-bold">
-                      <span>Discount</span>
-                      <span>-{formatPrice(order.discount)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between text-gray-600">
                     <span>Shipping</span>
                     <span className="text-emerald-600 font-bold">FREE</span>

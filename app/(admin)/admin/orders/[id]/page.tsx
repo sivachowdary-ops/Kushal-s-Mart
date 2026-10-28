@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useAdminStore } from "@/lib/admin-store";
 import { supabase } from "@/lib/supabase-client";
+import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw } from "lucide-react";
 
@@ -118,10 +119,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     if (!order) return;
     setIsSaving(true);
     try {
-      await updateOrderStatus(id, status as any);
-      alert("Status updated");
-    } catch (e) {
-      alert("Failed to update status");
+      const ok = await updateOrderStatus(id, status);
+      alert(ok ? "Status updated" : "Failed to update status. Please refresh and try again.");
     } finally {
       setIsSaving(false);
     }
@@ -131,10 +130,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     if (!order) return;
     setIsSaving(true);
     try {
-      await updateOrderShipping(id, courierName, awb);
-      alert("Shipping details updated");
-    } catch (e) {
-      alert("Failed to update shipping details");
+      const ok = await updateOrderShipping(id, courierName, awb);
+      alert(ok ? "Shipping details updated" : "Failed to update shipping details. Please refresh and try again.");
     } finally {
       setIsSaving(false);
     }
@@ -171,7 +168,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setRefundMessage({ type: "success", text: `✓ Refund processed (${data.status}). Refund ID: ${data.refundId}` });
+        const refundId = (data.refundResult as { id?: string } | undefined)?.id;
+        setRefundMessage({
+          type: "success",
+          text: `✓ Refund processed (${data.status})${refundId ? `. Refund ID: ${refundId}` : ""}`,
+        });
         setShowRefundForm(false);
         setRefundAmount("");
         setRefundNote("");
@@ -194,6 +195,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     return <div className="p-8 text-center text-slate-500">Order not found</div>;
   }
 
+  const isPaid =
+    order.payment_status === "PAID" ||
+    order.payment_status === "PARTIALLY_REFUNDED" ||
+    order.status === "PAID";
+  const address = order.shipping_address as Record<string, string> | string | null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -205,7 +212,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <h1 className="text-3xl font-bold text-slate-900">Order #{order.order_number}</h1>
             <div className="text-sm text-slate-500 mt-1 flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              {new Date(order.created_at).toLocaleString('en-IN')}
+              {formatDate(order.created_at)}
             </div>
           </div>
         </div>
@@ -355,15 +362,19 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     </div>
                   ) : (
                 <div className="space-y-2 pt-1">
-                  {(order.payment_status === "PAID" || order.status === "PAID") && (
+                  {isPaid ? (
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
                       ⚡ Payment Confirmed: Ready for automatic / 1-click Delhivery dispatch.
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800">
+                      ⛔ This order is not paid ({order.payment_status || "PENDING"}). Do not ship it.
                     </div>
                   )}
                   <button
                     type="button"
                     onClick={handleDispatchDelhivery}
-                    disabled={isDispatchingDelhivery}
+                    disabled={isDispatchingDelhivery || !isPaid}
                     className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 shadow-sm cursor-pointer active:scale-95"
                   >
                     <Truck className="h-4 w-4" />
@@ -405,7 +416,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   <option value="PENDING">PENDING</option>
                   <option value="PENDING_PAYMENT">PENDING_PAYMENT</option>
                   <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
+                  <option value="PAID">PAID</option>
                   <option value="PROCESSING">PROCESSING</option>
+                  <option value="PACKED">PACKED</option>
                   <option value="SHIPPED">SHIPPED</option>
                   <option value="DELIVERED">DELIVERED</option>
                   <option value="COMPLETED">COMPLETED</option>
@@ -553,16 +566,22 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             )}
           </div>
 
-          {order.shipping_address && (
+          {address && (
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-slate-400" />
                 Shipping Address
               </h2>
-              <div className="text-sm text-slate-700 whitespace-pre-wrap">
-                {typeof order.shipping_address === 'string' 
-                  ? order.shipping_address 
-                  : JSON.stringify(order.shipping_address, null, 2)}
+              <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {typeof address === "string"
+                  ? address
+                  : [
+                      address.address,
+                      [address.city, address.state].filter(Boolean).join(", "),
+                      address.pincode ? `PIN ${address.pincode}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
               </div>
             </div>
           )}

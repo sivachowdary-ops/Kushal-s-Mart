@@ -86,8 +86,18 @@ export default function ProductsPage() {
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this product?")) {
       setIsDeleting(id);
-      await deleteProduct(id);
-      setIsDeleting(null);
+      try {
+        await deleteProduct(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to delete product";
+        alert(
+          /foreign key|violates|referenced/i.test(message)
+            ? "This product has existing orders, so it can't be deleted. Edit it and turn off \"Active\" to hide it from the store instead."
+            : message
+        );
+      } finally {
+        setIsDeleting(null);
+      }
     }
   };
 

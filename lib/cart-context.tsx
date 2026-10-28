@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { Check, X } from "lucide-react";
 
 export interface CartItem {
@@ -13,6 +13,8 @@ export interface CartItem {
   price: number; // in paise
   image: string;
   quantity: number;
+  /** Stock available when the item was added/last synced; caps the quantity steppers */
+  maxStock?: number;
 }
 
 interface CartContextType {
@@ -21,22 +23,49 @@ interface CartContextType {
   subtotal: number;
   isCartOpen: boolean;
   isLoaded: boolean;
+  /** Message shown after syncing the cart changed prices or removed items */
+  cartNotice: string | null;
   openCart: () => void;
   closeCart: () => void;
   addToCart: (item: Omit<CartItem, "id">) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  syncCartWithCatalog: () => Promise<void>;
+  dismissCartNotice: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = "kushals_mart_cart_v1";
 
+/** Must match MAX_QTY_PER_LINE in /api/orders/create */
+export const MAX_QTY_PER_ITEM = 20;
+
+/** Highest quantity allowed for a cart line, given the stock we know about. */
+export function getMaxQuantity(item: Pick<CartItem, "maxStock">): number {
+  return typeof item.maxStock === "number" ? Math.min(item.maxStock, MAX_QTY_PER_ITEM) : MAX_QTY_PER_ITEM;
+}
+
+interface CatalogVariant {
+  id: string;
+  name: string;
+  stock: number;
+  selling_price_override: number | null;
+}
+
+interface CatalogProduct {
+  id: string;
+  name: string;
+  selling_price: number;
+  variants: CatalogVariant[];
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -50,6 +79,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
     setIsLoaded(true);
   }, []);
+
+  // Latest cart for async work (catalog sync) that must not read a stale closure
+  const cartItemsRef = useRef<CartItem[]>([]);
+  useEffect(() => {
+    cartItemsRef.current = cartItems;
+  }, [cartItems]);
 
   // Save cart to localStorage on changes
   useEffect(() => {
@@ -70,18 +105,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [toastItem]);
 
   const openCart = () => setIsCartOpen(true);
-  const closeCart = () => setIsCartOpen(false);
+  const closeCart = useCallback(() => setIsCartOpen(false), []);
 
   const addToCart = (newItem: Omit<CartItem, "id">) => {
     const id = `${newItem.productId}-${newItem.variantId}`;
     setCartItems((prev) => {
-      const existingIdx = prev.findIndex((item) => item.id === id);
-      if (existingIdx > -1) {
-        const updated = [...prev];
-        updated[existingIdx].quantity += newItem.quantity;
-        return updated;
+      const existing = prev.find((item) => item.id === id);
+      if (existing) {
+        // Immutable update — mutating the previous state object double-counts under React StrictMode
+        const merged = { ...existing, ...newItem, id };
+        merged.quantity = Math.min(existing.quantity + newItem.quantity, getMaxQuantity(merged));
+        return prev.map((item) => (item.id === id ? merged : item));
       }
-      return [...prev, { ...newItem, id }];
+      const added = { ...newItem, id };
+      added.quantity = Math.max(1, Math.min(newItem.quantity, getMaxQuantity(added)));
+      return [...prev, added];
     });
     setToastItem({
       name: newItem.name,
@@ -101,11 +139,84 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setCartItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: Math.min(quantity, getMaxQuantity(item)) } : item
+      )
     );
   };
 
   const clearCart = () => setCartItems([]);
+
+  /**
+   * Re-checks every cart line against the live catalog: updates prices and stock,
+   * caps quantities, and removes items that are no longer sold. Carts live in
+   * localStorage for days, so prices and stock can be stale by checkout time.
+   */
+  const syncCartWithCatalog = useCallback(async () => {
+    let catalog: CatalogProduct[];
+    try {
+      const res = await fetch("/api/storefront/products", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      catalog = data.products || [];
+    } catch {
+      return; // Offline — keep the cart as is; the server re-validates at checkout
+    }
+    if (catalog.length === 0) return;
+
+    const byId = new Map(catalog.map((p) => [p.id, p]));
+    const changes: string[] = [];
+    const next: CartItem[] = [];
+
+    for (const item of cartItemsRef.current) {
+      const product = byId.get(item.productId);
+      const variants = product?.variants || [];
+      const variant =
+        variants.find((v) => v.id === item.variantId) ||
+        (item.variantId === "default" ? variants[0] : undefined);
+
+      if (!product || !variant) {
+        changes.push(`"${item.name}" is no longer available and was removed`);
+        continue;
+      }
+      if (variant.stock <= 0) {
+        changes.push(`"${item.name}" (${variant.name}) is out of stock and was removed`);
+        continue;
+      }
+
+      const price = variant.selling_price_override ?? product.selling_price;
+      const id = `${item.productId}-${variant.id}`;
+      const alreadyInCart = next.find((n) => n.id === id)?.quantity ?? 0;
+      const wanted = item.quantity + alreadyInCart;
+      const quantity = Math.min(wanted, variant.stock, MAX_QTY_PER_ITEM);
+      if (price !== item.price) changes.push(`The price of "${item.name}" has changed`);
+      if (quantity < wanted) {
+        changes.push(
+          variant.stock < MAX_QTY_PER_ITEM && quantity === variant.stock
+            ? `Only ${variant.stock} of "${item.name}" left — quantity updated`
+            : `You can order up to ${MAX_QTY_PER_ITEM} of "${item.name}" at a time — quantity updated`
+        );
+      }
+
+      const synced: CartItem = {
+        ...item,
+        id,
+        variantId: variant.id,
+        variantName: variant.name || item.variantName,
+        price,
+        quantity,
+        maxStock: variant.stock,
+      };
+      const existingIdx = next.findIndex((n) => n.id === id);
+      if (existingIdx >= 0) next[existingIdx] = synced;
+      else next.push(synced);
+    }
+
+    setCartItems(next);
+    if (changes.length > 0) setCartNotice([...new Set(changes)].join(". ") + ".");
+  }, []);
+
+  const dismissCartNotice = () => setCartNotice(null);
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -118,12 +229,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         subtotal,
         isCartOpen,
         isLoaded,
+        cartNotice,
         openCart,
         closeCart,
         addToCart,
         removeFromCart,
         updateQuantity,
         clearCart,
+        syncCartWithCatalog,
+        dismissCartNotice,
       }}
     >
       {children}

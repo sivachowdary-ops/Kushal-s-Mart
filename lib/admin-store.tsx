@@ -189,6 +189,10 @@ interface AdminStoreContextType {
     awb: string
   ) => Promise<boolean>;
   refreshOrders: () => Promise<void>;
+  /** Orders a customer actually placed — excludes abandoned (PENDING_PAYMENT) and failed checkouts */
+  placedOrders: AdminOrder[];
+  /** Orders that count as revenue — paid, not cancelled or refunded */
+  revenueOrders: AdminOrder[];
 
   // Financial Stats
   totalRevenue: number;
@@ -206,6 +210,23 @@ interface AdminStoreContextType {
 const AdminStoreContext = createContext<AdminStoreContextType | undefined>(
   undefined
 );
+
+/** Reads the API error message from a failed response. */
+async function readError(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => ({}));
+  return body.error || body.message || `${fallback} (${res.status})`;
+}
+
+/** YYYY-MM-DD in the browser's local time zone (IST for the shop), not UTC. */
+function localDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+const UNPLACED_STATUSES = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
+const NON_REVENUE_PAYMENT_STATUSES = ["REFUNDED", "FAILED"];
 
 // ── Helper: get auth token ─────────────────────────────────
 
@@ -306,7 +327,9 @@ export function AdminStoreProvider({
   const refreshOrders = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch("/api/admin/orders", { headers });
+      // Include unpaid/failed checkouts so the Orders page filters and order links work for them;
+      // dashboards use placedOrders / revenueOrders below.
+      const res = await fetch("/api/admin/orders?include_pending=true", { headers });
       if (res.ok) {
         const data = await res.json();
         setOrders(Array.isArray(data) ? data : data.orders || []);
@@ -410,37 +433,30 @@ export function AdminStoreProvider({
           headers: { ...headers, "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (res.ok) {
-          const data = await res.json();
-          const updated = normalizeProduct(data.product || data);
-          setProducts((prev) =>
-            prev.map((p) => (p.id === id ? updated : p))
-          );
-          return true;
-        }
+        if (!res.ok) throw new Error(await readError(res, "Failed to update product"));
+        const data = await res.json();
+        const updated = normalizeProduct(data.product || data);
+        setProducts((prev) =>
+          prev.map((p) => (p.id === id ? updated : p))
+        );
+        return true;
       } catch (e) {
         console.error("Failed to update product:", e);
+        throw e;
       }
-      return false;
     },
     []
   );
 
   const deleteProduct = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/products/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id));
-        return true;
-      }
-    } catch (e) {
-      console.error("Failed to delete product:", e);
-    }
-    return false;
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/admin/products/${id}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) throw new Error(await readError(res, "Failed to delete product"));
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    return true;
   }, []);
 
   // ── Category CRUD ──
@@ -449,25 +465,17 @@ export function AdminStoreProvider({
     async (
       cat: Omit<AdminCategory, "id">
     ): Promise<AdminCategory | null> => {
-      try {
-        const headers = await getAuthHeaders();
-        const res = await fetch("/api/admin/categories", {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify(cat),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const newCat = data.category || data;
-          if (newCat) {
-            setCategories((prev) => [...prev, newCat]);
-            return newCat;
-          }
-        }
-      } catch (e) {
-        console.error("Failed to add category:", e);
-      }
-      return null;
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/categories", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(cat),
+      });
+      if (!res.ok) throw new Error(await readError(res, "Failed to create category"));
+      const data = await res.json();
+      const newCat = data.category || data;
+      setCategories((prev) => [...prev, newCat]);
+      return newCat;
     },
     []
   );
@@ -477,46 +485,39 @@ export function AdminStoreProvider({
       id: string,
       updates: Partial<AdminCategory>
     ): Promise<boolean> => {
-      try {
-        const headers = await getAuthHeaders();
-        const res = await fetch(`/api/admin/categories/${id}`, {
-          method: "PUT",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify(updates),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const updated = data.category || data;
-          if (updated) {
-            setCategories((prev) =>
-              prev.map((c) => (c.id === id ? updated : c))
-            );
-          }
-          return true;
-        }
-      } catch (e) {
-        console.error("Failed to update category:", e);
-      }
-      return false;
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/categories/${id}`, {
+        method: "PUT",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(await readError(res, "Failed to update category"));
+      const data = await res.json();
+      const updated = data.category || data;
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? updated : c))
+      );
+      return true;
     },
     []
   );
 
   const deleteCategory = useCallback(async (id: string): Promise<boolean> => {
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/categories/${id}`, {
-        method: "DELETE",
-        headers,
-      });
-      if (res.ok) {
-        setCategories((prev) => prev.filter((c) => c.id !== id));
-        return true;
-      }
-    } catch (e) {
-      console.error("Failed to delete category:", e);
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/admin/categories/${id}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) {
+      const message = await readError(res, "Failed to delete category");
+      throw new Error(
+        /foreign key|violates|referenced/i.test(message)
+          ? "This category still has products. Move or delete its products first."
+          : message
+      );
     }
-    return false;
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    return true;
   }, []);
 
   // ── Order CRUD ──
@@ -623,13 +624,18 @@ export function AdminStoreProvider({
 
   // ── Financial Calculations (client-side from loaded data) ──
 
-  const paidOrders = orders.filter(
+  const placedOrders = orders.filter((o) => !UNPLACED_STATUSES.includes(o.status));
+
+  const paidOrders = placedOrders.filter(
     (o) =>
-      o.payment_status === "PAID" ||
-      o.status === "COMPLETED" ||
-      o.status === "DELIVERED" ||
-      o.status === "SHIPPED" ||
-      o.status === "PACKED"
+      o.status !== "CANCELLED" &&
+      !NON_REVENUE_PAYMENT_STATUSES.includes(o.payment_status) &&
+      (o.payment_status === "PAID" ||
+        o.payment_status === "PARTIALLY_REFUNDED" ||
+        o.status === "COMPLETED" ||
+        o.status === "DELIVERED" ||
+        o.status === "SHIPPED" ||
+        o.status === "PACKED")
   );
 
   const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
@@ -653,9 +659,10 @@ export function AdminStoreProvider({
 
   const totalNetProfit = totalRevenue - totalCostOfGoods;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const ordersToday = orders.filter(
-    (o) => o.created_at.slice(0, 10) === todayStr
+  // Local (IST) date — comparing UTC dates showed yesterday's orders until 5:30 AM
+  const todayStr = localDateKey(new Date());
+  const ordersToday = placedOrders.filter(
+    (o) => localDateKey(new Date(o.created_at)) === todayStr
   ).length;
 
   const lowStockCount = products.reduce((count, p) => {
@@ -672,7 +679,7 @@ export function AdminStoreProvider({
       const now = new Date();
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth();
-      const currentDateStr = now.toISOString().slice(0, 10);
+      const currentDateStr = localDateKey(now);
 
       // Calculate start of current week (Monday)
       const dayOfWeek = now.getDay();
@@ -684,7 +691,7 @@ export function AdminStoreProvider({
       const filteredOrders = paidOrders.filter((order) => {
         const orderDate = new Date(order.created_at);
         if (timeframe === "today") {
-          return order.created_at.slice(0, 10) === currentDateStr;
+          return localDateKey(orderDate) === currentDateStr;
         }
         if (timeframe === "week") {
           return orderDate >= weekStart;
@@ -788,6 +795,8 @@ export function AdminStoreProvider({
         updateOrderStatus,
         updateOrderShipping,
         refreshOrders,
+        placedOrders,
+        revenueOrders: paidOrders,
         totalRevenue,
         totalCostOfGoods,
         totalNetProfit,

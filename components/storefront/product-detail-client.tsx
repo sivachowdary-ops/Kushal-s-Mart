@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
-import { useCart } from "@/lib/cart-context";
+import { useCart, MAX_QTY_PER_ITEM } from "@/lib/cart-context";
 import { ColorSwatchSelector } from "@/components/storefront/color-swatch-selector";
 
 export interface Variant {
@@ -49,12 +49,13 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
 
   const product = initialProduct;
   const [selectedImage, setSelectedImage] = useState<number>(0);
+  // Open on the first colour that's in stock, not on a sold-out one
   const [selectedVariantId, setSelectedVariantId] = useState<string>(
-    product.variants[0]?.id || ""
+    (product.variants.find((v) => v.stock > 0) || product.variants[0])?.id || ""
   );
   const [quantity, setQuantity] = useState<number>(1);
   const [pincode, setPincode] = useState<string>("");
-  const [deliveryResult, setDeliveryResult] = useState<string | null>(null);
+  const [deliveryResult, setDeliveryResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"desc" | "shipping">("desc");
   const [addedToCartToast, setAddedToCartToast] = useState<boolean>(false);
 
@@ -109,10 +110,13 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
     setTouchStartX(null);
   };
 
-  // Reset gallery to first image whenever the selected variant changes
-  useEffect(() => {
+  // Switching colour resets the gallery and keeps the quantity within that colour's stock
+  const handleSelectVariant = (variantId: string) => {
+    setSelectedVariantId(variantId);
     setSelectedImage(0);
-  }, [selectedVariantId]);
+    const stock = product.variants.find((v) => v.id === variantId)?.stock ?? 0;
+    setQuantity((q) => Math.max(1, Math.min(q, stock, MAX_QTY_PER_ITEM)));
+  };
 
   // Preload all product and variant images in the background so mobile color switching is instantaneous
   useEffect(() => {
@@ -144,6 +148,7 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
       price: activePrice,
       image: activeImages[0] || product.images[0] || "",
       quantity,
+      maxStock: currentVariant.stock,
     });
     setAddedToCartToast(true);
     setTimeout(() => setAddedToCartToast(false), 3500);
@@ -165,15 +170,16 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   };
 
   const checkPincode = () => {
-    if (pincode.length === 6) {
-      setDeliveryResult("Estimated Delivery in 3-5 Business Days across India.");
+    if (/^[1-9]\d{5}$/.test(pincode)) {
+      setDeliveryResult({ ok: true, text: "Estimated Delivery in 3-5 Business Days across India." });
     } else {
-      setDeliveryResult("Please enter a valid 6-digit Indian PIN code.");
+      setDeliveryResult({ ok: false, text: "Please enter a valid 6-digit Indian PIN code." });
     }
   };
 
   const variantStock = currentVariant?.stock ?? 0;
   const isInStock = variantStock > 0;
+  const maxQuantity = Math.min(variantStock, MAX_QTY_PER_ITEM);
 
   return (
     <div className="bg-[#F4F5F7] min-h-screen pb-28 lg:pb-16">
@@ -286,7 +292,7 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                 <ColorSwatchSelector
                   variants={product.variants as any}
                   selectedVariantId={selectedVariantId}
-                  onSelectVariant={setSelectedVariantId}
+                  onSelectVariant={handleSelectVariant}
                   mode="gallery-bar"
                 />
               </div>
@@ -367,7 +373,7 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   <ColorSwatchSelector
                     variants={product.variants as any}
                     selectedVariantId={selectedVariantId}
-                    onSelectVariant={setSelectedVariantId}
+                    onSelectVariant={handleSelectVariant}
                     mode="interactive"
                   />
                 </div>
@@ -406,8 +412,8 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   </button>
                   <span className="w-12 text-center text-sm font-extrabold text-gray-900">{quantity}</span>
                   <button
-                    onClick={() => setQuantity(Math.min(variantStock, quantity + 1))}
-                    disabled={!isInStock || quantity >= variantStock}
+                    onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
+                    disabled={!isInStock || quantity >= maxQuantity}
                     className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white text-gray-700 shadow-sm hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     aria-label="Increase quantity"
                   >
@@ -479,7 +485,9 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   </button>
                 </div>
                 {deliveryResult && (
-                  <p className="text-xs font-semibold text-emerald-700 mt-1">{deliveryResult}</p>
+                  <p className={`text-xs font-semibold mt-1 ${deliveryResult.ok ? "text-emerald-700" : "text-red-600"}`}>
+                    {deliveryResult.text}
+                  </p>
                 )}
               </div>
             </div>

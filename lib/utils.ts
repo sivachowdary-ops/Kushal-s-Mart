@@ -85,23 +85,32 @@ export function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + "...";
 }
 
+/** The shop's time zone — times show in IST whatever the viewer's device or server is set to. */
+const SHOP_TIME_ZONE = "Asia/Kolkata";
+
 /**
- * Format a date for display (e.g. "26 Aug 2026, 3:42 PM").
+ * Format a date and time for display in 24-hour IST (e.g. "26 Aug 2026, 15:42").
  */
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
+  return `${formatDateShort(d)}, ${formatTime(d)}`;
+}
+
+/**
+ * Format a time for display in 24-hour IST (e.g. "15:42").
+ */
+export function formatTime(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hourCycle: "h23",
+    timeZone: SHOP_TIME_ZONE,
   });
 }
 
 /**
- * Format a date for display without time (e.g. "26 Aug 2026").
+ * Format a date for display without time in IST (e.g. "26 Aug 2026").
  */
 export function formatDateShort(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
@@ -109,5 +118,6 @@ export function formatDateShort(date: Date | string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: SHOP_TIME_ZONE,
   });
 }

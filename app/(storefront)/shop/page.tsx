@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, ArrowUpDown, ChevronRight, Package } from "lucide-react";
 import { ProductCard } from "@/components/storefront/product-card";
+import type { SwatchVariant } from "@/components/storefront/color-swatch-selector";
+
+type SortOption = "featured" | "price-low" | "price-high" | "discount";
+const SORT_OPTIONS: SortOption[] = ["featured", "price-low", "price-high", "discount"];
+
+/** Rounds the most expensive product up to the next ₹500 so the slider can always include it. */
+function priceCeilingFor(products: { selling_price: number }[]): number {
+  const highest = Math.max(0, ...products.map((p) => Math.ceil(p.selling_price / 100)));
+  return Math.max(500, Math.ceil(highest / 500) * 500);
+}
 
 interface StoreProduct {
   id: string;
@@ -19,6 +30,7 @@ interface StoreProduct {
   category_slug: string | null;
   in_stock: boolean;
   total_stock?: number;
+  variants?: SwatchVariant[];
 }
 
 interface StoreCategory {
@@ -29,26 +41,57 @@ interface StoreCategory {
 }
 
 export default function ShopPage() {
+  return (
+    <Suspense fallback={null}>
+      <ShopContent />
+    </Suspense>
+  );
+}
+
+function ShopContent() {
+  const searchParams = useSearchParams();
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"featured" | "price-low" | "price-high" | "discount">("featured");
+  const [sortBy, setSortBy] = useState<SortOption>("featured");
+  const [priceCeiling, setPriceCeiling] = useState<number>(25000);
   const [maxPrice, setMaxPrice] = useState<number>(25000);
+
+  // Links like "Daily Deals" (/shop?sort=discount), search "View all" (/shop?q=…)
+  // and /shop?category=… set the initial filters
+  const urlQuery = searchParams.get("q") || "";
+  const urlSort = searchParams.get("sort") || "";
+  const urlCategory = searchParams.get("category") || "";
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing filters from the URL
+    setSearchQuery(urlQuery);
+    setSortBy(SORT_OPTIONS.includes(urlSort as SortOption) ? (urlSort as SortOption) : "featured");
+    setSelectedCategory(urlCategory || "all");
+  }, [urlQuery, urlSort, urlCategory]);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/storefront/products").then((r) => r.json()),
       fetch("/api/storefront/categories").then((r) => r.json()),
     ]).then(([pd, cd]) => {
-      setProducts(pd.products || []);
+      const loaded: StoreProduct[] = pd.products || [];
+      setProducts(loaded);
       setCategories(cd.categories || []);
-      // Set max price to highest product price
-      const prices = (pd.products || []).map((p: StoreProduct) => Math.ceil(p.selling_price / 100));
-      if (prices.length) setMaxPrice(Math.max(...prices));
-    }).finally(() => setIsLoading(false));
+      const ceiling = priceCeilingFor(loaded);
+      setPriceCeiling(ceiling);
+      setMaxPrice(ceiling);
+    }).catch(() => setLoadError(true))
+      .finally(() => setIsLoading(false));
   }, []);
+
+  const resetFilters = () => {
+    setSelectedCategory("all");
+    setSearchQuery("");
+    setMaxPrice(priceCeiling);
+  };
 
   const filteredProducts = useMemo(() => {
     return products.filter((prod) => {
@@ -143,7 +186,7 @@ export default function ShopPage() {
                 <input
                   type="range"
                   min="500"
-                  max="25000"
+                  max={priceCeiling}
                   step="500"
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(Number(e.target.value))}
@@ -151,9 +194,9 @@ export default function ShopPage() {
                 />
               </div>
 
-              {(selectedCategory !== "all" || searchQuery || maxPrice < 25000) && (
+              {(selectedCategory !== "all" || searchQuery || maxPrice < priceCeiling) && (
                 <button
-                  onClick={() => { setSelectedCategory("all"); setSearchQuery(""); setMaxPrice(25000); }}
+                  onClick={resetFilters}
                   className="mt-6 w-full text-center text-xs font-bold text-red-600 hover:underline"
                 >
                   Reset All Filters
@@ -205,6 +248,7 @@ export default function ShopPage() {
                     discountPercent={product.discount_percent}
                     badgeType={product.discount_percent >= 30 ? "DEALS" : "SAVE"}
                     totalStock={product.total_stock}
+                    variants={product.variants}
                   />
                 ))}
               </div>
@@ -213,10 +257,16 @@ export default function ShopPage() {
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mx-auto mb-4">
                   <Package className="h-7 w-7 text-gray-400" />
                 </div>
-                <p className="text-base font-bold text-gray-900 mb-1">No products found</p>
-                <p className="text-xs text-gray-500 mb-4">Try clearing your search or selecting a different category.</p>
+                <p className="text-base font-bold text-gray-900 mb-1">
+                  {loadError ? "Couldn't load products" : "No products found"}
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  {loadError
+                    ? "Please check your connection and refresh the page."
+                    : "Try clearing your search or selecting a different category."}
+                </p>
                 <button
-                  onClick={() => { setSelectedCategory("all"); setSearchQuery(""); setMaxPrice(25000); }}
+                  onClick={resetFilters}
                   className="rounded-full bg-black px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-600 transition-colors"
                 >
                   Clear Filters
