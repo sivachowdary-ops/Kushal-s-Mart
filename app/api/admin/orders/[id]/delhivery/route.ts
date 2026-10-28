@@ -28,8 +28,12 @@ export async function POST(
 
     const order = normalizeOrder(rawOrder);
 
-    // Prevent duplicate dispatch attempts if AWB already generated
-    if (order.shiprocket_awb) {
+    // Prevent duplicate dispatch attempts if a real AWB already exists. Older orders can hold the
+    // order number ("KM-…") in this field instead of an AWB — those still need a real shipment.
+    const existingAwb = (order.shiprocket_awb || "").trim();
+    const hasRealAwb =
+      existingAwb !== "" && !existingAwb.startsWith("KM-") && existingAwb !== order.order_number;
+    if (hasRealAwb) {
       return NextResponse.json(
         {
           success: true,

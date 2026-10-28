@@ -359,7 +359,22 @@ export async function getDelhiveryTrackingStatus(
 
     const json = await res.json();
     const pkgData = json.ShipmentData?.[0]?.Shipment || json.packages?.[0] || {};
-    const rawStatus = (pkgData.Status?.Status || pkgData.status || "In Transit").trim();
+    const reportedStatus = String(pkgData.Status?.Status || pkgData.status || "").trim();
+
+    // Delhivery has no record of this AWB (e.g. a mistyped manual AWB). This used to fall back to
+    // "In Transit", which marked the order SHIPPED and showed customers tracking that didn't exist.
+    if (!reportedStatus) {
+      return {
+        success: false,
+        waybill: cleanAwb,
+        currentStatus: "UNKNOWN",
+        currentStage: "PACKED",
+        error: json.Error || "Delhivery has no tracking information for this AWB",
+        scans: [],
+      };
+    }
+
+    const rawStatus = reportedStatus;
     const rawType = (pkgData.Status?.StatusType || "").toUpperCase();
 
     // Map Delhivery status to 5-stage timeline
@@ -375,8 +390,17 @@ export async function getDelhiveryTrackingStatus(
       statusLower.includes("return") ||
       rawType === "RT";
 
+    // Shipment booked but the courier hasn't collected it from the shop yet. Delhivery reports these
+    // with StatusType "UD" too, so check before the in-transit rule — "Not Picked" was shown as SHIPPED.
+    const isAwaitingPickup =
+      statusLower.includes("not picked") ||
+      statusLower.includes("manifested") ||
+      statusLower.includes("pickup scheduled");
+
     if (isFailedOrReturn) {
       stage = "SHIPPED";
+    } else if (isAwaitingPickup) {
+      stage = "PACKED";
     } else if (statusLower.includes("delivered") || rawType === "DL") {
       stage = "DELIVERED";
     } else if (statusLower.includes("out for delivery") || statusLower.includes("dispatched for delivery")) {
@@ -386,11 +410,10 @@ export async function getDelhiveryTrackingStatus(
       statusLower.includes("reached") ||
       statusLower.includes("left") ||
       statusLower.includes("transit") ||
+      statusLower.includes("picked up") ||
       rawType === "UD"
     ) {
       stage = "SHIPPED";
-    } else if (statusLower.includes("manifested") || statusLower.includes("picked")) {
-      stage = "PACKED";
     }
 
     const rawScans = pkgData.Scans || [];
