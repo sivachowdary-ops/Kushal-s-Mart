@@ -74,8 +74,9 @@ const SLIDES: ProductSlide[] = [
     cta: { label: "Shop diecast", href: "/category/diecast-metal-cars", className: "bg-[#111625] text-white hover:bg-black" },
     secondary: { label: "See 1/34 & 1/36", href: "/category/diecast-metal-cars?sub=1-34-1-36-scale" },
     images: [
-      { src: `${CLOUDINARY}/zht6jisxzh9e7wupkhpq`, alt: "1/36 BMW XM diecast model", className: "absolute right-[3%] top-[7%] w-[46%]" },
-      { src: `${CLOUDINARY}/ay6eya5puefjxvndgpu6`, alt: "1/36 Lamborghini Urus diecast model", className: "relative mt-[16%] mr-[32%] w-[58%]" },
+      // Side by side, never overlapping: the Urus a little lower and larger in front, the BMW behind it on the right
+      { src: `${CLOUDINARY}/ay6eya5puefjxvndgpu6`, alt: "1/36 Lamborghini Urus diecast model", className: "w-[50%] translate-y-[10%]" },
+      { src: `${CLOUDINARY}/zht6jisxzh9e7wupkhpq`, alt: "1/36 BMW XM diecast model", className: "w-[44%] -translate-y-[10%]" },
     ],
     sticker: { big: "1/34 & 1/36", small: "new scale", className: "bg-[#D3150F] text-white -rotate-3" },
   },
@@ -119,8 +120,6 @@ function PosterFrame({
         <div className="relative lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:self-center">
           <div className="relative flex h-[210px] items-center justify-center overflow-hidden rounded-[22px] bg-[#F2F0EB] ring-[5px] ring-inset ring-white/60 sm:h-[300px] lg:h-[400px] lg:rounded-[30px] xl:h-[420px]">
             {windowContent}
-            {/* Light catching the window's plastic */}
-            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(118deg,transparent_22%,rgba(255,255,255,0.55)_30%,transparent_38%,transparent_70%,rgba(255,255,255,0.35)_75%,transparent_80%)]" />
           </div>
           {sticker && (
             <div className={`absolute -right-1.5 -top-3 flex flex-col items-center rounded-2xl px-3.5 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.25)] sm:-right-3 sm:-top-4 lg:px-5 lg:py-3.5 ${sticker.className}`}>
