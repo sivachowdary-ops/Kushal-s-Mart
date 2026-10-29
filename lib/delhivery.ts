@@ -221,14 +221,21 @@ export async function createDelhiveryShipment(
 
     const json = await res.json().catch(() => ({}));
 
-    // Debug: log the full Delhivery response so we can see it in Vercel logs
-    console.log(`[Delhivery Create] Order ${data.orderNumber} — raw response:`, JSON.stringify(json).slice(0, 800));
+    // Log only non-personal fields — the full response echoes the customer's name, address and phone.
+    // The complete response is kept in shipment_creation_log (server-only table) for debugging.
+    console.log(
+      `[Delhivery Create] Order ${data.orderNumber} — HTTP ${res.status}, success: ${json.success ?? "-"}, ` +
+      `packages: ${Array.isArray(json.packages) ? json.packages.length : 0}`
+    );
 
     // Check for success waybill in Delhivery's various response formats
     let waybill = "";
     if (json.packages && Array.isArray(json.packages) && json.packages.length > 0) {
       const pkg = json.packages[0];
-      console.log(`[Delhivery Create] Package[0]:`, JSON.stringify(pkg).slice(0, 400));
+      console.log(
+        `[Delhivery Create] Package[0] status: ${pkg.status ?? "-"}, waybill: ${pkg.waybill || "none"}, ` +
+        `remarks: ${Array.isArray(pkg.remarks) ? pkg.remarks.join("; ") : pkg.remarks || "-"}`
+      );
       
       // waybill = actual AWB from Delhivery
       // refnum = seller's reference (could be our order number or a short Delhivery ref)
