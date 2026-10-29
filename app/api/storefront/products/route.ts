@@ -28,9 +28,11 @@ export async function GET(request: Request) {
     // Sanitize search input: strip PostgREST-special characters to prevent filter injection,
     // and the ilike wildcards (% * _) so a search for "%" doesn't match every product
     const sanitized = searchQuery.trim().replace(/[.,()"'\\;%*_]/g, "").slice(0, 100);
-    if (sanitized.length > 0) {
-      query = query.or(`name.ilike.%${sanitized}%,brand.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+    if (sanitized.length === 0) {
+      // Nothing searchable left (e.g. a search for "%") — no matches rather than the whole catalogue
+      return NextResponse.json({ products: [] });
     }
+    query = query.or(`name.ilike.%${sanitized}%,brand.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
   }
 
   if (categorySlug) {
