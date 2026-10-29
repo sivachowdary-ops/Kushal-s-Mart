@@ -89,6 +89,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               name: v.name,
               sku: v.sku,
               stock: v.stock,
+              // Lets the server apply only the change the admin made, not overwrite sales since loading
+              original_stock: v.stock,
               low_stock_threshold: v.low_stock_threshold ?? 3,
               selling_price_override: v.selling_price_override,
               mrp_override: v.mrp_override,

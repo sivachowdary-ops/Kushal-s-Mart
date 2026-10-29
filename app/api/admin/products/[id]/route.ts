@@ -3,6 +3,32 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeProduct, toProductDB, toVariantDB } from "@/lib/db-normalize";
 import { verifyAdmin } from "@/lib/admin-auth";
 
+/**
+ * Adds `delta` to a variant's stock without losing concurrent sales: the write only succeeds if
+ * stock still holds the value just read (optimistic retry). Never goes below zero.
+ */
+async function adjustStock(variantId: string, delta: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: current, error: readErr } = await supabaseAdmin
+      .from("ProductVariant")
+      .select("stock")
+      .eq("id", variantId)
+      .single();
+    if (readErr || !current) return false;
+
+    const { data: written, error: writeErr } = await supabaseAdmin
+      .from("ProductVariant")
+      .update({ stock: Math.max(0, (current.stock || 0) + delta), updatedAt: new Date().toISOString() })
+      .eq("id", variantId)
+      .eq("stock", current.stock)
+      .select("id");
+    if (writeErr) return false;
+    if (written && written.length > 0) return true;
+    // Stock changed between read and write (a sale happened) — read again and retry
+  }
+  return false;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -91,13 +117,18 @@ export async function PUT(
         const variantId = (v.id as string) || (variantRow.id as string);
 
         if (v.id && existingIds.has(v.id as string)) {
+          // When the form says what stock it loaded, apply only the admin's change. Writing the
+          // form's number back would undo every sale made while the form was open.
+          const originalStock = typeof v.original_stock === "number" ? v.original_stock : null;
+          const stockDelta = originalStock === null ? 0 : (variantRow.stock as number) - originalStock;
+
           // Update existing variant — keeps primary key intact, preserves OrderItem FK!
           const { error: updateVarErr } = await supabaseAdmin
             .from("ProductVariant")
             .update({
               name: variantRow.name,
               sku: variantRow.sku,
-              stock: variantRow.stock,
+              ...(originalStock === null ? { stock: variantRow.stock } : {}),
               lowStockThreshold: variantRow.lowStockThreshold,
               sellingPriceOverride: variantRow.sellingPriceOverride,
               mrpOverride: variantRow.mrpOverride,
@@ -108,6 +139,10 @@ export async function PUT(
 
           if (updateVarErr) {
             console.error(`[admin/products] Error updating variant ${v.id}:`, updateVarErr);
+          }
+          if (stockDelta !== 0) {
+            const ok = await adjustStock(v.id as string, stockDelta);
+            if (!ok) console.error(`[admin/products] Could not adjust stock for variant ${v.id} by ${stockDelta}`);
           }
         } else {
           // Insert new variant

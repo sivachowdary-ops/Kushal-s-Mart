@@ -63,6 +63,8 @@ export interface AdminVariant {
   images?: string[];
   created_at?: string;
   updated_at?: string;
+  /** Edit form only: the stock when the form loaded, so a save applies the admin's change as a delta */
+  original_stock?: number;
 }
 
 export interface AdminOrder {
