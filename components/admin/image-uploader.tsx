@@ -58,7 +58,7 @@ async function uploadToR2(file: File, folder: string): Promise<string> {
   const headers: Record<string, string> = {};
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token || (typeof window !== "undefined" ? localStorage.getItem("admin_token") : "") || "";
+    const token = session?.access_token || "";
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

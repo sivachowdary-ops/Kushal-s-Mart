@@ -62,11 +62,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     async function checkSession() {
       try {
+        // Older versions kept an extra copy of the access token here; remove any leftover
+        try { localStorage.removeItem("admin_token"); } catch {}
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          if (session.access_token) {
-            try { localStorage.setItem("admin_token", session.access_token); } catch {}
-          }
           // Verify the user is actually an admin
           const verifyRes = await fetch("/api/admin/auth/login", {
             method: "POST",
@@ -80,9 +80,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             } else {
               setIsAuthenticated(true);
             }
-          } else {
-            // Not an admin — don't grant access
-            try { localStorage.removeItem("admin_token"); } catch {}
+          } else if (verifyRes.status === 401 || verifyRes.status === 403) {
+            // Not an admin — don't grant access. (Other errors, e.g. a brief outage or rate
+            // limit, just leave the login screen showing instead of signing the admin out.)
             await supabase.auth.signOut();
           }
         }
@@ -94,15 +94,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     checkSession();
 
-    // Keep the stored token fresh and react to sign-out. Granting access is left to
-    // the explicit admin + 2FA checks above — any signed-in user triggers this event.
+    // React to sign-out. Granting access is left to the explicit admin + 2FA checks above —
+    // any signed-in user triggers this event.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        if (session.access_token) {
-          try { localStorage.setItem("admin_token", session.access_token); } catch {}
-        }
-      } else {
-        try { localStorage.removeItem("admin_token"); } catch {}
+      if (!session?.user) {
         setIsAuthenticated(false);
         setMfaFactorId(null);
         setUserEmail(null);
@@ -199,7 +194,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleLogout = async () => {
-    try { localStorage.removeItem("admin_token"); } catch {}
     setIsAuthenticated(false);
     setMfaFactorId(null);
     setUserEmail(null);

@@ -28,7 +28,7 @@ export default function ProductsPage() {
       while (!isDone && iteration < 30) {
         iteration++;
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || localStorage.getItem("admin_token") || "";
+        const token = session?.access_token || "";
 
         const res = await fetch("/api/admin/migrate-images", {
           method: "POST",

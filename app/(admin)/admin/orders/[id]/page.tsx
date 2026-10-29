@@ -54,9 +54,6 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         token = session?.access_token || "";
       } catch {}
       if (!token) {
-        try { token = localStorage.getItem("admin_token") || ""; } catch {}
-      }
-      if (!token) {
         alert("Admin session expired or not found. Please refresh the page or log in again.");
         setIsDispatchingDelhivery(false);
         return;
