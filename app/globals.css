@@ -84,3 +84,20 @@ h1, h2, h3, h4, h5, h6 {
     margin: 3mm;
   }
 }
+
+/* Homepage hero: the active tab's bar fills while its slide is on screen; animationend moves to the next slide.
+   With reduced motion there is no animation, so the bar shows full and the carousel does not auto-advance. */
+@keyframes hero-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.hero-progress {
+  animation: hero-progress 6s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-progress {
+    animation: none;
+  }
+}
