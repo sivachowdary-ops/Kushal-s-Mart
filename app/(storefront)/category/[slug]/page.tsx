@@ -75,12 +75,15 @@ export default async function CategoryDetailPage({
     }
   }
 
+  // One rule for both the filter pills' counts and the filtered list (they used to differ,
+  // so a product could be counted under two pills or shown under none)
+  const subSlugOf = (p: { sub_category_slug?: string | null; subCategoryId?: string | null }) =>
+    p.sub_category_slug || catSubcategories.find((s) => s.id === p.subCategoryId)?.slug || null;
+
   // Filter by selected subcategory if not 'all'
   let filteredProductsList = allCategoryProducts;
   if (currentSub !== "all") {
-    filteredProductsList = allCategoryProducts.filter(
-      (p) => p.sub_category_slug === currentSub || p.subCategoryId === currentSub
-    );
+    filteredProductsList = allCategoryProducts.filter((p) => subSlugOf(p) === currentSub);
   }
 
   const products = filteredProductsList.map((p) => {
@@ -153,9 +156,7 @@ export default async function CategoryDetailPage({
                 All ({allCategoryProducts.length})
               </Link>
               {catSubcategories.map((sub) => {
-                const count = allCategoryProducts.filter(
-                  (p) => p.sub_category_slug === sub.slug || p.subCategoryId === sub.id
-                ).length;
+                const count = allCategoryProducts.filter((p) => subSlugOf(p) === sub.slug).length;
                 const isActive = currentSub === sub.slug;
                 return (
                   <Link

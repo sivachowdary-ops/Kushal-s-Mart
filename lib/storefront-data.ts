@@ -62,6 +62,11 @@ let cachedRawProducts: any[] = fallbackData.products || [];
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+// The home, shop-by-category and product pages all read this cached catalogue, so it must hold
+// every active product. It used to stop at the 60 newest, which hid older products — e.g. only 9 of
+// 24 RC cars showed once newer diecast models were added. 1000 is Supabase's default row cap.
+const CATALOG_LIMIT = 1000;
+
 /**
  * Normalizes a raw Product row from Supabase (or fallback JSON)
  * into a fully-typed StorefrontProduct with guaranteed category information.
@@ -141,6 +146,17 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
     if (idToSlugMap[subCategoryId]) {
       subCategorySlug = idToSlugMap[subCategoryId];
     }
+  }
+
+  // A subcategory from a different category (e.g. a diecast "1/64 Scale" on an RC car) can't be
+  // shown under this product's category filters — drop it so the name/slug heuristic below
+  // places the product instead of it vanishing from every filter.
+  const resolvedCategoryId = p.categoryId || (categorySlug === "rc-cars" ? "cat-rc-cars" : categorySlug === "diecast-metal-cars" ? "cat-diecast" : null);
+  const knownSub = DEFAULT_SUBCATEGORIES.find((s) => s.slug === subCategorySlug || s.id === subCategoryId);
+  if (knownSub && resolvedCategoryId && knownSub.categoryId !== resolvedCategoryId) {
+    subCategoryId = null;
+    subCategorySlug = null;
+    subCategoryName = null;
   }
 
   // Resolve name from slug when SubCategory relation isn't joined
@@ -283,7 +299,7 @@ export async function getStorefrontData(forceRefresh = false): Promise<{
         `)
         .eq("isActive", true)
         .order("createdAt", { ascending: false })
-        .limit(60),
+        .limit(CATALOG_LIMIT),
     ]);
 
     let categories = catRes.data;
@@ -306,7 +322,7 @@ export async function getStorefrontData(forceRefresh = false): Promise<{
           `)
           .eq("isActive", true)
           .order("createdAt", { ascending: false })
-          .limit(60),
+          .limit(CATALOG_LIMIT),
       ]);
       if (retryCat.data && retryCat.data.length > 0) categories = retryCat.data;
       if (retryProd.data && retryProd.data.length > 0) rawProducts = retryProd.data;
