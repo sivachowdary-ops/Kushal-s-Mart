@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createRazorpayOrder } from "@/lib/razorpay";
+import { generateOrderNumber, isOrderNumberClash } from "@/lib/order-number";
 
 interface OrderItemRecord {
   id?: string;
@@ -37,13 +38,6 @@ interface ProductRow {
 
 const MAX_CART_LINES = 50;
 const MAX_QTY_PER_LINE = 20;
-
-function generateOrderNumber() {
-  const date = new Date();
-  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
-  const randomStr = Math.floor(1000 + Math.random() * 9000).toString();
-  return `KM-${dateStr}-${randomStr}`;
-}
 
 function cleanText(value: unknown, maxLength: number): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -207,34 +201,43 @@ export async function POST(request: Request) {
     // Razorpay minimum is ₹1 (100 paise)
     if (subtotal < 100) return badRequest("Order total is too low");
 
-    const orderNumber = generateOrderNumber();
     const now = new Date().toISOString();
     const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
     // ── Create Order with PENDING_PAYMENT status ────────────────────────────
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("Order")
-      .insert([{
-        id: orderId,
-        orderNumber,
-        channel,
-        status: "PENDING_PAYMENT",
-        customerName,
-        customerPhone,
-        customerEmail,
-        shippingAddress,
-        subtotal,
-        discount: 0,
-        total: subtotal,
-        paymentStatus: "PENDING",
-        paymentMode: "prepaid",
-        updatedAt: now,
-      }])
-      .select()
-      .single();
+    // Retry with a fresh order number on the (very unlikely) chance it's already taken
+    let orderNumber = "";
+    let order: { id: string } | null = null;
+    let orderError: { code?: string; message: string } | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      orderNumber = generateOrderNumber();
+      const result = await supabaseAdmin
+        .from("Order")
+        .insert([{
+          id: orderId,
+          orderNumber,
+          channel,
+          status: "PENDING_PAYMENT",
+          customerName,
+          customerPhone,
+          customerEmail,
+          shippingAddress,
+          subtotal,
+          discount: 0,
+          total: subtotal,
+          paymentStatus: "PENDING",
+          paymentMode: "prepaid",
+          updatedAt: now,
+        }])
+        .select()
+        .single();
+      order = result.data;
+      orderError = result.error;
+      if (!isOrderNumberClash(orderError)) break;
+    }
 
-    if (orderError) {
-      console.error("[orders/create] Order insert failed:", orderError.message);
+    if (orderError || !order) {
+      console.error("[orders/create] Order insert failed:", orderError?.message);
       return NextResponse.json({ error: "Could not create your order. Please try again." }, { status: 500 });
     }
 

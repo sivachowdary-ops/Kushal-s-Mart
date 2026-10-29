@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeOrder } from "@/lib/db-normalize";
 import { verifyAdminOrStaff } from "@/lib/admin-auth";
-
-function generateOrderNumber() {
-  const date = new Date();
-  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
-  const randomStr = Math.floor(1000 + Math.random() * 9000).toString();
-  return `KM-${dateStr}-${randomStr}`;
-}
+import { generateOrderNumber, isOrderNumberClash } from "@/lib/order-number";
 
 // CHANGED: table "orders"→"Order", join "order_items"→"OrderItem", column "created_at"→"createdAt"
 export async function GET(request: Request) {
@@ -80,11 +74,13 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
 
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("Order")
-      .insert([dbOrder])
-      .select()
-      .single();
+    // Retry with a fresh order number on the (very unlikely) chance it's already taken
+    let insert = await supabaseAdmin.from("Order").insert([dbOrder]).select().single();
+    for (let attempt = 1; attempt < 3 && isOrderNumberClash(insert.error); attempt++) {
+      dbOrder.orderNumber = generateOrderNumber();
+      insert = await supabaseAdmin.from("Order").insert([dbOrder]).select().single();
+    }
+    const { data: order, error: orderError } = insert;
 
     if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
 
