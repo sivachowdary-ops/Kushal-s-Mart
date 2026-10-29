@@ -4,21 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, X } from "lucide-react";
 
+// Once per visit: sessionStorage clears when the visitor closes the site, so it shows again next time
 const STORAGE_KEY = "km_apsrtc_popup_seen";
-const SHOW_AGAIN_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // once a week per visitor
 
-/** One-time announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Telangana. */
+/** Once-per-visit announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Telangana. */
 export function DeliveryPopup() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    let seenAt = 0;
     try {
-      seenAt = Number(localStorage.getItem(STORAGE_KEY)) || 0;
+      if (sessionStorage.getItem(STORAGE_KEY)) return;
     } catch {
       return; // storage blocked — skip the pop-up rather than show it on every page
     }
-    if (Date.now() - seenAt < SHOW_AGAIN_AFTER_MS) return;
     const timer = setTimeout(() => setOpen(true), 1200);
     return () => clearTimeout(timer);
   }, []);
@@ -33,7 +31,7 @@ export function DeliveryPopup() {
   function close() {
     setOpen(false);
     try {
-      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+      sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
     } catch {}
   }
 
