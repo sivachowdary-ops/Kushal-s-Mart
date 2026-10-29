@@ -14,8 +14,13 @@ export async function GET(request: Request) {
     .select(`*, Category ( id, name ), ProductVariant ( * )`)
     .order("createdAt", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json((data || []).map(normalizeProduct));
+  if (error) {
+    console.error("[admin/products] Query failed:", error.message);
+    return NextResponse.json({ error: "Failed to load products" }, { status: 500 });
+  }
+  const products = (data || []).map(normalizeProduct);
+  // POS cashiers don't need the shop's purchase prices
+  return NextResponse.json(user.role === "admin" ? products : products.map((p) => ({ ...p, cost_price: 0 })));
 }
 
 // CHANGED: table "products" → "Product", body snake_case → camelCase for DB,

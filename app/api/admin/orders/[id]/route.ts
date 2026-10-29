@@ -44,10 +44,21 @@ export async function GET(
     .from("Order")
     .select(`*, OrderItem ( * )`)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(normalizeOrder(data));
+  if (error) {
+    console.error("[admin/orders/:id] Query failed:", error.message);
+    return NextResponse.json({ error: "Failed to load order" }, { status: 500 });
+  }
+  // POS cashiers may only open counter sales, and never see cost prices
+  if (!data || (user.role !== "admin" && data.channel !== "OFFLINE")) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+  const order = normalizeOrder(data);
+  if (user.role !== "admin") {
+    order.order_items = order.order_items.map((item) => ({ ...item, cost_price: 0 }));
+  }
+  return NextResponse.json(order);
 }
 
 // CHANGED: table names + column names updated. Incoming body uses snake_case,
