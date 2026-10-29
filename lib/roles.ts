@@ -1,8 +1,8 @@
 import type { User } from "@supabase/supabase-js";
 
 /**
- * Admin accounts recognised by email. The server re-checks this on every API call;
- * client-side use is only a UI gate.
+ * Admin accounts recognised by email. SERVER-ONLY: don't import this from a "use client" file —
+ * that would ship the admin emails to every visitor. Pages ask /api/admin/auth/me instead.
  */
 const ADMIN_EMAILS = new Set(["jogabetha@gmail.com", "sivaprasadpenneti8@gmail.com"]);
 

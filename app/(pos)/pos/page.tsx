@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useAdminStore, AdminProduct, AdminVariant, AdminOrder } from "@/lib/admin-store";
 import { supabase } from "@/lib/supabase-client";
-import { resolveUserRole } from "@/lib/roles";
 import { formatDateShort, formatTime } from "@/lib/utils";
 import { checkAuthLockout, recordFailedAuthAttempt, resetAuthAttempts } from "@/lib/auth-rate-limit";
 import {
@@ -37,6 +36,21 @@ interface CartItem {
   product: AdminProduct;
   variant: AdminVariant;
   quantity: number;
+}
+
+/**
+ * Asks the server whether this login may use the POS ("admin" / "pos_staff", or null).
+ * The role list stays on the server, so admin emails aren't shipped in the page's code.
+ */
+async function fetchPosRole(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch("/api/admin/auth/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.role === "string" ? data.role : null;
+  } catch {
+    return null;
+  }
 }
 
 function getVariants(product: AdminProduct): AdminVariant[] {
@@ -108,7 +122,7 @@ export default function StandalonePOSPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           // UI gate only — the API re-checks the role server-side on every call
-          if (resolveUserRole(session.user)) {
+          if (await fetchPosRole(session.access_token)) {
             setIsRegisterUnlocked(true);
             const staffDisplayName = (session.user.user_metadata?.name as string) || session.user.email || "Cashier";
             setCashierName(staffDisplayName);
@@ -164,7 +178,7 @@ export default function StandalonePOSPage() {
         }
       } else if (data.session && data.user) {
         // Enforce role authorization: Must be registered pos_staff or store admin
-        if (!resolveUserRole(data.user)) {
+        if (!(await fetchPosRole(data.session.access_token))) {
           await supabase.auth.signOut();
           setPosAuthError("Access Denied: This account is not authorized for the store POS terminal. Contact your store administrator.");
           return;
