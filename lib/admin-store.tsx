@@ -261,6 +261,7 @@ export function AdminStoreProvider({
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [subcategories, setSubcategories] = useState<AdminSubCategory[]>([
+    { id: "sub-diecast-1-34-36", name: "1/34 & 1/36 Scale", slug: "1-34-1-36-scale", category_id: "cat-diecast", sort_order: 0 },
     { id: "sub-diecast-1-18", name: "1/18 Scale", slug: "1-18-scale", category_id: "cat-diecast", sort_order: 1 },
     { id: "sub-diecast-1-24", name: "1/24 Scale", slug: "1-24-scale", category_id: "cat-diecast", sort_order: 2 },
     { id: "sub-diecast-1-32", name: "1/32 Scale", slug: "1-32-scale", category_id: "cat-diecast", sort_order: 3 },

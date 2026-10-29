@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const DEFAULT_SUBCATEGORIES = [
   // Diecast Cars
+  { id: "sub-diecast-1-34-36", name: "1/34 & 1/36 Scale", slug: "1-34-1-36-scale", categoryId: "cat-diecast", sortOrder: 0 },
   { id: "sub-diecast-1-18", name: "1/18 Scale", slug: "1-18-scale", categoryId: "cat-diecast", sortOrder: 1 },
   { id: "sub-diecast-1-24", name: "1/24 Scale", slug: "1-24-scale", categoryId: "cat-diecast", sortOrder: 2 },
   { id: "sub-diecast-1-32", name: "1/32 Scale", slug: "1-32-scale", categoryId: "cat-diecast", sortOrder: 3 },

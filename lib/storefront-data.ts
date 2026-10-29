@@ -134,6 +134,7 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   // If subCategoryId is present but subCategorySlug is missing, resolve it from known IDs
   if (subCategoryId && !subCategorySlug) {
     const idToSlugMap: Record<string, string> = {
+      "sub-diecast-1-34-36": "1-34-1-36-scale",
       "sub-diecast-1-18": "1-18-scale",
       "sub-diecast-1-24": "1-24-scale",
       "sub-diecast-1-32": "1-32-scale",
@@ -162,6 +163,7 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   // Resolve name from slug when SubCategory relation isn't joined
   if (subCategorySlug && !subCategoryName) {
     const slugNameMap: Record<string, string> = {
+      "1-34-1-36-scale": "1/34 & 1/36 Scale",
       "1-18-scale": "1/18 Scale", "1-24-scale": "1/24 Scale",
       "1-32-scale": "1/32 Scale", "1-43-scale": "1/43 Scale",
       "1-64-scale": "1/64 Scale", "hotwheels": "Hotwheels",
@@ -173,7 +175,11 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
   if (!subCategorySlug) {
     const text = `${p.name} ${p.slug}`.toLowerCase();
     if (categorySlug === "diecast-metal-cars") {
-      if (text.includes("1/18") || text.includes("1:18")) {
+      if (/1[/:]3[46]\b|1-3[46]-scale/.test(text)) {
+        subCategorySlug = "1-34-1-36-scale";
+        subCategoryId = "sub-diecast-1-34-36";
+        subCategoryName = "1/34 & 1/36 Scale";
+      } else if (text.includes("1/18") || text.includes("1:18")) {
         subCategorySlug = "1-18-scale";
         subCategoryId = "sub-diecast-1-18";
         subCategoryName = "1/18 Scale";
@@ -249,6 +255,7 @@ export function normalizeStoreProduct(p: any, categorySlugMap?: Map<string, stri
 }
 
 export const DEFAULT_SUBCATEGORIES: StorefrontSubCategory[] = [
+  { id: "sub-diecast-1-34-36", name: "1/34 & 1/36 Scale", slug: "1-34-1-36-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 0, sort_order: 0 },
   { id: "sub-diecast-1-18", name: "1/18 Scale", slug: "1-18-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 1, sort_order: 1 },
   { id: "sub-diecast-1-24", name: "1/24 Scale", slug: "1-24-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 2, sort_order: 2 },
   { id: "sub-diecast-1-32", name: "1/32 Scale", slug: "1-32-scale", categoryId: "cat-diecast", category_id: "cat-diecast", sortOrder: 3, sort_order: 3 },

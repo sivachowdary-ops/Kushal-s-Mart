@@ -154,6 +154,7 @@ export function toProductDB(body: Record<string, unknown>) {
     row.subCategoryId = body.sub_category_id || null;
     if (!body.sub_category_slug && body.sub_category_id) {
       const idToSlugMap: Record<string, string> = {
+        "sub-diecast-1-34-36": "1-34-1-36-scale",
         "sub-diecast-1-18": "1-18-scale",
         "sub-diecast-1-24": "1-24-scale",
         "sub-diecast-1-32": "1-32-scale",
