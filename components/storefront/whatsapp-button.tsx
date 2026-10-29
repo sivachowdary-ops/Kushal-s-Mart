@@ -15,28 +15,25 @@ export function WhatsAppButton() {
     "Hi Kushal's Mart, I need help with a product.\n\nProduct Link: "
   );
 
-  // On mobile, product pages have a sticky "Add to Cart / Buy It Now" bar at the bottom;
-  // lift the button above it so it doesn't cover "Buy It Now".
-  const hasStickyBuyBar = pathname?.startsWith("/product/");
+  // Product pages have their own "Order on WhatsApp" button (and a sticky buy bar on phones),
+  // so the floating button would only cover the page there.
+  if (pathname?.startsWith("/product/")) return null;
 
   return (
-    <aside
-      aria-label="Live Support"
-      className={`fixed right-6 z-50 ${hasStickyBuyBar ? "bottom-24 lg:bottom-6" : "bottom-6"}`}
-    >
+    <aside aria-label="Live Support" className="fixed bottom-4 right-4 z-50 sm:bottom-6 sm:right-6">
       <a
         href={`https://wa.me/${WHATSAPP_NUMBER}?text=${PREBUILT_MESSAGE}`}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Chat with Live Support on WhatsApp"
-        className="group flex items-center gap-3 rounded-2xl bg-[#111625] p-2.5 pr-5 text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:bg-black active:scale-95 border border-gray-800"
+        className="group flex items-center gap-3 rounded-full bg-[#25D366] p-1.5 text-white sm:rounded-2xl sm:bg-[#111625] sm:p-2.5 sm:pr-5 shadow-2xl transition-all duration-300 hover:scale-105 hover:bg-black active:scale-95 sm:border sm:border-gray-800"
       >
         {/* WhatsApp Icon Box with Online Indicator Dot */}
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25D366] text-white shadow">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white sm:h-10 sm:w-10 sm:rounded-xl sm:shadow">
           {/* Green Online Pulse Dot */}
           <span className="absolute -top-1 -right-1 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-300 border-2 border-[#111625]"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-300 border-2 border-white sm:border-[#111625]"></span>
           </span>
 
           <svg
@@ -49,8 +46,8 @@ export function WhatsAppButton() {
           </svg>
         </div>
 
-        {/* Text Details */}
-        <div className="flex flex-col text-left">
+        {/* Text Details (phones show just the round icon) */}
+        <div className="hidden flex-col text-left sm:flex">
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-tight">
             LIVE SUPPORT
           </span>

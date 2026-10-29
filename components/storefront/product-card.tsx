@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 
 import { useCart } from "@/lib/cart-context";
@@ -74,24 +74,20 @@ export function ProductCard({
         {/* Top Badges Row */}
         <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
           <div>
-            {badgeType === "DEALS" && (
-              <span className="inline-block rounded-full bg-[#E60000] px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
-                DEALS
+            {/* Any discount reads the same everywhere: "60% off" */}
+            {(badgeType === "DEALS" || badgeType === "SAVE") && calcDiscount > 0 && (
+              <span className="inline-block rounded-full bg-[#E60000] px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-extrabold text-white shadow-xs">
+                {calcDiscount}% off
               </span>
             )}
             {badgeType === "BESTSELLER" && (
-              <span className="inline-block rounded-full bg-amber-500 px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
-                BESTSELLER
-              </span>
-            )}
-            {badgeType === "SAVE" && calcDiscount > 0 && (
-              <span className="inline-block rounded-md bg-black px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
-                SAVE {calcDiscount}%
+              <span className="inline-block rounded-full bg-amber-500 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-extrabold text-white shadow-xs">
+                Bestseller
               </span>
             )}
             {badgeType === "NEW" && (
-              <span className="inline-block rounded-full bg-blue-600 px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-xs">
-                NEW
+              <span className="inline-block rounded-full bg-blue-600 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-extrabold text-white shadow-xs">
+                New
               </span>
             )}
           </div>
@@ -151,35 +147,25 @@ export function ProductCard({
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-          <button
-            onClick={handleQuickAdd}
-            disabled={isSoldOut}
-            className={`flex items-center justify-center gap-1 rounded-xl sm:rounded-2xl py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white shadow-xs transition-all duration-200 cursor-pointer ${
-              isSoldOut ? "bg-gray-300 cursor-not-allowed" : isAdded ? "bg-emerald-600 scale-95 shadow-emerald-600/30 shadow-md" : "bg-black hover:bg-red-600 hover:scale-102 active:scale-95 hover:shadow-md"
-            }`}
-          >
-            {isSoldOut ? (
-              <span>Sold Out</span>
-            ) : isAdded ? (
-              <>
-                <Check className="h-3.5 w-3.5 stroke-[3]" />
-                <span>Added!</span>
-              </>
-            ) : (
-              <span>+ Cart</span>
-            )}
-          </button>
-          <Link
-            href={`/product/${slug}`}
-            prefetch={true}
-            className="flex items-center justify-center gap-1 rounded-xl sm:rounded-2xl bg-[#111625] py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white shadow-xs transition-all duration-200 hover:bg-red-600 hover:scale-102 active:scale-95 hover:shadow-md"
-          >
-            <span>Details</span>
-            <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        </div>
+        {/* One clear action; the photo and name open the product page */}
+        <button
+          onClick={handleQuickAdd}
+          disabled={isSoldOut}
+          className={`flex w-full min-h-[44px] items-center justify-center gap-1.5 rounded-xl sm:rounded-2xl py-2.5 sm:py-3 text-[13px] sm:text-sm font-bold text-white shadow-xs transition-all duration-200 cursor-pointer ${
+            isSoldOut ? "bg-gray-300 cursor-not-allowed" : isAdded ? "bg-emerald-600 shadow-emerald-600/30 shadow-md" : "bg-[#111625] hover:bg-red-600 active:scale-95 hover:shadow-md"
+          }`}
+        >
+          {isSoldOut ? (
+            <span>Sold out</span>
+          ) : isAdded ? (
+            <>
+              <Check className="h-4 w-4 stroke-[3]" />
+              <span>Added</span>
+            </>
+          ) : (
+            <span>Add to cart</span>
+          )}
+        </button>
       </div>
     </div>
   );

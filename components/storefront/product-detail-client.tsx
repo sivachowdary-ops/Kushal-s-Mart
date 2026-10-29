@@ -201,18 +201,18 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                 </Link>
               </>
             )}
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-gray-900 truncate max-w-xs">{product.name}</span>
+            <ChevronRight className="hidden sm:block h-3 w-3" />
+            <span className="hidden sm:inline text-gray-900 truncate max-w-xs">{product.name}</span>
           </div>
         </div>
       </div>
 
       {/* Main PDP Grid */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 lg:gap-8 items-start">
 
           {/* Left: Image Gallery with Carousel Navigation */}
-          <div className="lg:col-span-7 bg-white rounded-3xl p-4 sm:p-6 border border-gray-200/80 shadow-sm lg:sticky lg:top-24">
+          <div className="lg:col-span-7 lg:row-span-2 bg-white rounded-3xl p-4 sm:p-6 border border-gray-200/80 shadow-sm lg:sticky lg:top-24">
             <div
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -328,9 +328,9 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
             )}
           </div>
 
-          {/* Right: Product Info & Actions */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-sm space-y-5">
+          {/* Right, top: name and price. On phones this card moves above the photos so both are on the first screen. */}
+          <div className="-order-1 lg:order-none lg:col-span-5">
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-200/80 shadow-sm space-y-3 sm:space-y-4">
 
               {/* Brand & Stock */}
               <div className="flex items-center justify-between gap-2">
@@ -366,24 +366,12 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
               </div>
 
               {/* Title */}
-              <h1 className="font-extrabold text-2xl sm:text-3xl text-gray-900 leading-tight">
+              <h1 className="font-extrabold text-xl sm:text-3xl text-gray-900 leading-tight">
                 {product.name}
               </h1>
 
-              {/* Variant Selector */}
-              {product.variants.length > 1 && (
-                <div className="pt-2 border-t border-gray-100">
-                  <ColorSwatchSelector
-                    variants={product.variants as any}
-                    selectedVariantId={selectedVariantId}
-                    onSelectVariant={handleSelectVariant}
-                    mode="interactive"
-                  />
-                </div>
-              )}
-
               {/* Price */}
-              <div className="flex items-baseline gap-3 pt-1 border-t border-gray-100">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-extrabold text-3xl sm:text-4xl text-gray-900">
                   {formatPrice(activePrice)}
                 </span>
@@ -393,14 +381,30 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                   </span>
                 )}
                 {discountPercent > 0 && (
-                  <span className="rounded-md bg-black px-2.5 py-1 text-xs font-black text-white uppercase tracking-wider">
-                    Save {discountPercent}%
+                  <span className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-black text-white">
+                    {discountPercent}% off
                   </span>
                 )}
               </div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              <p className="text-xs font-medium text-gray-500">
                 Inclusive of all taxes. Free express shipping across India.
               </p>
+            </div>
+          </div>
+
+          {/* Right, below: colour, quantity, buy buttons, PIN check */}
+          <div className="lg:col-span-5 lg:col-start-8">
+            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-200/80 shadow-sm space-y-5">
+
+              {/* Variant Selector */}
+              {product.variants.length > 1 && (
+                <ColorSwatchSelector
+                  variants={product.variants as any}
+                  selectedVariantId={selectedVariantId}
+                  onSelectVariant={handleSelectVariant}
+                  mode="interactive"
+                />
+              )}
 
               {/* Quantity Stepper */}
               <div className="flex items-center gap-4 pt-3 border-t border-gray-100">

@@ -30,12 +30,15 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
       {/* Top mini-bar */}
-      <div className="bg-[#111625] py-2 text-xs text-white">
+      <div className="bg-[#111625] py-1.5 sm:py-2 text-[11px] sm:text-xs text-white">
         <div className="mx-auto max-w-7xl px-4 flex items-center justify-center gap-3 sm:gap-5 font-semibold text-center">
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
             <Truck className="h-4 w-4 shrink-0 text-[#FFC21A]" />
+            {/* One line on phones */}
             <span>
-              <span className="text-[#FFC21A] font-bold">24–48 hr delivery</span> across Andhra Pradesh &amp; Telangana by APSRTC
+              <span className="text-[#FFC21A] font-bold">24–48 hr delivery</span>
+              <span className="sm:hidden"> in AP &amp; Telangana by APSRTC</span>
+              <span className="hidden sm:inline"> across Andhra Pradesh &amp; Telangana by APSRTC</span>
             </span>
           </span>
           <span className="hidden md:inline text-gray-500">·</span>
@@ -50,22 +53,22 @@ export function Header() {
 
       {/* Main Header */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-20 items-center justify-between gap-4">
+        <div className="flex h-16 sm:h-20 items-center justify-between gap-4">
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-            <div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-white flex items-center justify-center transition-transform group-hover:scale-105">
+            <div className="relative h-11 w-11 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-white flex items-center justify-center transition-transform group-hover:scale-105">
               <Image
                 src="/kushal_mart_logo.jpeg"
                 alt="Kushal's Mart Logo"
                 fill
-                sizes="(max-width: 640px) 48px, 56px"
+                sizes="(max-width: 640px) 44px, 56px"
                 className="object-contain"
                 priority
               />
             </div>
             <div>
-              <span className="font-extrabold text-2xl tracking-tight text-gray-900 block leading-tight">KUSHAL&apos;S</span>
+              <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-gray-900 block leading-tight">KUSHAL&apos;S</span>
               <span className="font-bold text-xs uppercase tracking-widest block text-red-600">MART</span>
             </div>
           </Link>
@@ -141,6 +144,7 @@ export function Header() {
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 lg:hidden"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}

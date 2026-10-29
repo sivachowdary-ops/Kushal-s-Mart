@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Phone, Mail, MapPin, Truck, ShieldCheck, Headset, Store, Package, Search, Clock, CheckCircle2, Car, Trophy, Sparkles } from "lucide-react";
+import { ArrowRight, Phone, Mail, MapPin, Truck, ShieldCheck, Headset, Store, Search, Clock, CheckCircle2, Car, Trophy, Sparkles } from "lucide-react";
 import { HeroSlider } from "@/components/storefront/hero-slider";
 import { ProductCard } from "@/components/storefront/product-card";
 import { getStorefrontData } from "@/lib/storefront-data";
@@ -88,24 +88,24 @@ function TrackOrderSection() {
 export default async function HomePage() {
   const { categories, subcategories, allProducts } = await getStorefrontData();
 
+  // Each product appears in only one homepage section: later sections skip anything already shown above.
+  const shown = new Set<string>();
+  const pick = (match: (p: (typeof allProducts)[number]) => boolean, count: number) => {
+    const picked = allProducts.filter((p) => !shown.has(p.id) && match(p)).slice(0, count);
+    picked.forEach((p) => shown.add(p.id));
+    return picked;
+  };
+
   // §1 Critical Constraint: Every product in Best Sellers MUST have its verified real photo
-  const bestSellers = allProducts
-    .filter((p) => p.images && p.images.length > 0 && p.imageUrl)
-    .slice(0, 8);
+  const bestSellers = pick((p) => Boolean(p.images && p.images.length > 0 && p.imageUrl), 8);
 
   // Hot deals with active discounts
-  const dealProducts = allProducts
-    .filter((p) => p.discountPercent > 0)
-    .slice(0, 4);
+  const dealProducts = pick((p) => p.discountPercent > 0, 4);
 
   // Latest RC Cars & Diecast — robust categorization
-  const latestRcCars = allProducts
-    .filter((p) => p.category_slug === "rc-cars" || p.categoryId === "cat-rc-cars")
-    .slice(0, 4);
+  const latestRcCars = pick((p) => p.category_slug === "rc-cars" || p.categoryId === "cat-rc-cars", 4);
 
-  const diecastModels = allProducts
-    .filter((p) => p.category_slug === "diecast-metal-cars" || p.categoryId === "cat-diecast")
-    .slice(0, 4);
+  const diecastModels = pick((p) => p.category_slug === "diecast-metal-cars" || p.categoryId === "cat-diecast", 4);
 
   return (
     <div className="pb-16 bg-[#F4F5F7]">
@@ -218,10 +218,12 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* Best Sellers Grid — Strictly 2 per row on mobile */}
+            {/* Best Sellers Grid — Strictly 2 per row on mobile; phones show 4 to keep the page short */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-              {bestSellers.map((product) => (
-                <ProductCard key={product.id} {...product} />
+              {bestSellers.map((product, idx) => (
+                <div key={product.id} className={idx < 4 ? "grid" : "hidden lg:grid"}>
+                  <ProductCard {...product} />
+                </div>
               ))}
             </div>
           </div>
@@ -263,84 +265,72 @@ export default async function HomePage() {
       )}
 
       {/* ── 5. Latest RC Cars & Crawlers ── */}
-      <section className="py-12 border-t border-gray-200/60 bg-[#F4F5F7]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-gray-400 block mb-1">
-                HIGH SPEED &amp; 4WD CRAWLERS
-              </span>
-              <h2 className="font-extrabold text-3xl sm:text-4xl text-gray-900 tracking-tight">
-                RC Cars &amp; Trucks
-              </h2>
-              <p className="mt-1 text-sm text-gray-500 font-medium">
-                Proportional steering, 2.4GHz remotes, and rechargeable battery packs.
-              </p>
-            </div>
-            <Link
-              href="/category/rc-cars"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111625] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-transform hover:scale-105 hover:bg-black shrink-0"
-            >
-              <span>View RC Collection</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-            {latestRcCars.length > 0 ? (
-              latestRcCars.map((product) => (
-                <ProductCard key={product.id} {...product} />
-              ))
-            ) : (
-              <div className="col-span-2 lg:col-span-4 bg-white rounded-3xl p-10 text-center border border-gray-200/80">
-                <Package className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                <p className="font-bold text-gray-900 mb-1">RC Models Coming Soon</p>
-                <p className="text-xs text-gray-500">Products are being added to the catalog.</p>
+      {latestRcCars.length > 0 && (
+        <section className="py-12 border-t border-gray-200/60 bg-[#F4F5F7]">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 block mb-1">
+                  HIGH SPEED &amp; 4WD CRAWLERS
+                </span>
+                <h2 className="font-extrabold text-3xl sm:text-4xl text-gray-900 tracking-tight">
+                  RC Cars &amp; Trucks
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 font-medium">
+                  Proportional steering, 2.4GHz remotes, and rechargeable battery packs.
+                </p>
               </div>
-            )}
+              <Link
+                href="/category/rc-cars"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111625] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-transform hover:scale-105 hover:bg-black shrink-0"
+              >
+                <span>View RC Collection</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+              {latestRcCars.map((product) => (
+                <ProductCard key={product.id} {...product} />
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── 6. Diecast Metal Models ── */}
-      <section className="py-12 border-t border-gray-200/60 bg-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-gray-400 block mb-1">
-                SCALE REPLICAS &amp; COLLECTIBLES
-              </span>
-              <h2 className="font-extrabold text-3xl sm:text-4xl text-gray-900 tracking-tight">
-                Diecast Metal Collectibles
-              </h2>
-              <p className="mt-1 text-sm text-gray-500 font-medium">
-                Premium 1/64 scale diecast metal collectible cars, Hot Wheels &amp; Mini GT.
-              </p>
-            </div>
-            <Link
-              href="/category/diecast-metal-cars"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111625] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-transform hover:scale-105 hover:bg-black shrink-0"
-            >
-              <span>View Diecast</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-            {diecastModels.length > 0 ? (
-              diecastModels.map((product) => (
-                <ProductCard key={product.id} {...product} />
-              ))
-            ) : (
-              <div className="col-span-2 lg:col-span-4 bg-white rounded-3xl p-10 text-center border border-gray-200/80">
-                <Package className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                <p className="font-bold text-gray-900 mb-1">Diecast Models Coming Soon</p>
-                <p className="text-xs text-gray-500">Products are being added to the catalog.</p>
+      {diecastModels.length > 0 && (
+        <section className="py-12 border-t border-gray-200/60 bg-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 block mb-1">
+                  SCALE REPLICAS &amp; COLLECTIBLES
+                </span>
+                <h2 className="font-extrabold text-3xl sm:text-4xl text-gray-900 tracking-tight">
+                  Diecast Metal Collectibles
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 font-medium">
+                  Premium 1/64 scale diecast metal collectible cars, Hot Wheels &amp; Mini GT.
+                </p>
               </div>
-            )}
+              <Link
+                href="/category/diecast-metal-cars"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#111625] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-transform hover:scale-105 hover:bg-black shrink-0"
+              >
+                <span>View Diecast</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+              {diecastModels.map((product) => (
+                <ProductCard key={product.id} {...product} />
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── Section 7: Dedicated Live Track Order Section ── */}
       <TrackOrderSection />
