@@ -1,27 +1,35 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { resolveUserRole } from "@/lib/roles";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { checkRateLimit, peekRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
 /**
  * POST /api/admin/auth/login
  * Confirms the Bearer token belongs to an admin. Deliberately does NOT require
  * MFA, so the login screen can tell an admin to complete the TOTP step.
+ *
+ * Rate limiting counts only FAILED checks (5 per 15 min per IP): the admin panel calls this on
+ * every load, so counting successes would lock out an admin who simply refreshes the page.
  */
 export async function POST(request: Request) {
-  // Rate-limit admin login: 5 attempts per 15 min per IP (playbook §7.3, §10)
-  const ip = getClientIp(request);
-  const rl = checkRateLimit(`admin-login:${ip}`, RATE_LIMITS.adminLogin);
+  const limitKey = `admin-login-failed:${getClientIp(request)}`;
+  const rl = await peekRateLimit(limitKey, RATE_LIMITS.adminLogin);
   if (!rl.allowed) {
     return NextResponse.json(
-      { error: `Too many login attempts. Try again in ${rl.retryAfterSeconds} seconds.` },
+      { error: `Too many failed login attempts. Try again in ${rl.retryAfterSeconds} seconds.` },
       { status: 429 }
     );
   }
+
+  const fail = async (error: string, status: number) => {
+    await checkRateLimit(limitKey, RATE_LIMITS.adminLogin);
+    return NextResponse.json({ error }, { status });
+  };
+
   try {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return fail("Unauthorized", 401);
     }
     const token = authHeader.slice("Bearer ".length).trim();
     const supabase = createClient(
@@ -31,11 +39,11 @@ export async function POST(request: Request) {
     );
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user || !user.email) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return fail("Invalid credentials", 401);
     }
 
     if (resolveUserRole(user) !== "admin") {
-      return NextResponse.json({ error: "Access denied. Not an admin user." }, { status: 403 });
+      return fail("Access denied. Not an admin user.", 403);
     }
 
     return NextResponse.json({

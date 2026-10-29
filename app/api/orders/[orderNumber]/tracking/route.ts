@@ -13,7 +13,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ orderNumber: string }> }
 ) {
-  const rl = checkRateLimit(`tracking:${getClientIp(request)}`, RATE_LIMITS.tracking);
+  const rl = await checkRateLimit(`tracking:${getClientIp(request)}`, RATE_LIMITS.tracking);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many tracking requests. Try again in ${rl.retryAfterSeconds} seconds.` },

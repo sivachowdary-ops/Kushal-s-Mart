@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   try {
     // Rate limit order creation to prevent stock depletion attacks
     const ip = getClientIp(request);
-    const rl = checkRateLimit(`order-create:${ip}`, RATE_LIMITS.orderCreate);
+    const rl = await checkRateLimit(`order-create:${ip}`, RATE_LIMITS.orderCreate);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Too many order attempts. Try again in ${rl.retryAfterSeconds} seconds.` },

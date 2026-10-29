@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = getClientIp(request);
-  const rl = checkRateLimit(`upload:${ip}`, RATE_LIMITS.upload);
+  const rl = await checkRateLimit(`upload:${ip}`, RATE_LIMITS.upload);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many upload attempts. Try again in ${rl.retryAfterSeconds} seconds.` },

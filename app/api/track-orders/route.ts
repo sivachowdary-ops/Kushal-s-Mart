@@ -9,7 +9,7 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 export async function GET(request: Request) {
   // Rate limit to prevent phone number enumeration
   const ip = getClientIp(request);
-  const rl = checkRateLimit(`track:${ip}`, RATE_LIMITS.trackOrders);
+  const rl = await checkRateLimit(`track:${ip}`, RATE_LIMITS.trackOrders);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many requests. Try again in ${rl.retryAfterSeconds} seconds.` },
