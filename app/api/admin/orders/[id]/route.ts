@@ -3,6 +3,34 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeOrder } from "@/lib/db-normalize";
 import { verifyAdmin, verifyAdminOrStaff } from "@/lib/admin-auth";
 
+/** Every status the app uses. Anything else is rejected instead of being saved as free text. */
+const ORDER_STATUSES = [
+  "PENDING_PAYMENT",
+  "PAYMENT_FAILED",
+  "PENDING",
+  "PAID",
+  "PROCESSING",
+  "PACKED",
+  "SHIPPED",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "COMPLETED",
+  "CANCELLED",
+];
+
+/** Trimmed text up to maxLength; "" or null clears the field; undefined means invalid input. */
+function optionalText(value: unknown, maxLength: number): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) return undefined;
+  return trimmed || null;
+}
+
+function badField(field: string) {
+  return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 });
+}
+
 // CHANGED: "orders"→"Order", "order_items"→"OrderItem", camelCase columns
 export async function GET(
   request: Request,
@@ -33,27 +61,72 @@ export async function PUT(
 
   const { id } = await params;
   try {
-    const body = await request.json();
-    const { status, shiprocket_awb, courier_name, note, ...otherData } = body;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { status, shiprocket_awb, courier_name, ...otherData } = body as Record<string, unknown>;
 
     // Build update object — ONLY columns that exist in the Prisma Order model
     const updateData: Record<string, unknown> = {};
 
-    if (status !== undefined) updateData.status = status;
-    if (shiprocket_awb !== undefined) updateData.shiprocketAwb = shiprocket_awb;
-    if (courier_name !== undefined) updateData.courierName = courier_name;
-
-    // Pass through other known camelCase fields from otherData
-    // payment_status deliberately excluded — only changeable via verified webhooks or explicit admin workflow
-    const fieldMap: Record<string, string> = {
-      shipping_address: "shippingAddress",
-      customer_name: "customerName",
-      customer_phone: "customerPhone",
-      customer_email: "customerEmail",
-    };
-    for (const [snake, camel] of Object.entries(fieldMap)) {
-      if (otherData[snake] !== undefined) updateData[camel] = otherData[snake];
+    if (status !== undefined) {
+      if (typeof status !== "string" || !ORDER_STATUSES.includes(status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Use one of: ${ORDER_STATUSES.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      updateData.status = status;
     }
+    if (shiprocket_awb !== undefined) {
+      const awb = optionalText(shiprocket_awb, 60);
+      if (awb === undefined) return badField("shiprocket_awb");
+      updateData.shiprocketAwb = awb;
+    }
+    if (courier_name !== undefined) {
+      const courier = optionalText(courier_name, 80);
+      if (courier === undefined) return badField("courier_name");
+      updateData.courierName = courier;
+    }
+
+    // Customer details an admin may correct. payment_status is deliberately not editable here —
+    // only verified Razorpay webhooks and the refund flow change it.
+    if (otherData.customer_name !== undefined) {
+      const name = optionalText(otherData.customer_name, 100);
+      if (!name) return badField("customer_name");
+      updateData.customerName = name;
+    }
+    if (otherData.customer_phone !== undefined) {
+      const phone = typeof otherData.customer_phone === "string" ? otherData.customer_phone.replace(/\D/g, "").slice(-10) : "";
+      if (!/^[6-9]\d{9}$/.test(phone)) return badField("customer_phone");
+      updateData.customerPhone = phone;
+    }
+    if (otherData.customer_email !== undefined) {
+      const email = optionalText(otherData.customer_email, 200);
+      if (email === undefined || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return badField("customer_email");
+      updateData.customerEmail = email;
+    }
+    if (otherData.shipping_address !== undefined) {
+      const a = otherData.shipping_address as Record<string, unknown> | null;
+      const address = a && typeof a === "object"
+        ? {
+            address: optionalText(a.address, 500),
+            city: optionalText(a.city, 100),
+            state: optionalText(a.state, 100),
+            pincode: typeof a.pincode === "string" ? a.pincode.replace(/\D/g, "") : "",
+          }
+        : null;
+      if (!address || !address.address || !address.city || !/^\d{6}$/.test(address.pincode)) {
+        return badField("shipping_address");
+      }
+      updateData.shippingAddress = address;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+    updateData.updatedAt = new Date().toISOString();
 
     // NOTE: 'paymentMode' and 'timeline' columns do NOT exist in the Order schema
     // Do not write them to the database
