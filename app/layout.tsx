@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-heading",
+  display: "swap",
+});
+
+// Display face for banners and big headlines
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["700", "800"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -45,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakartaSans.variable} ${inter.variable} h-full`}
+      className={`${plusJakartaSans.variable} ${inter.variable} ${bricolage.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-[#F4F5F7] text-[#111625] antialiased">
         {children}

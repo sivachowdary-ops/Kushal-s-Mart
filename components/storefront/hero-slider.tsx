@@ -2,261 +2,241 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Flame, 
-  Truck, 
-  Settings, 
-  Disc, 
-  Lightbulb, 
-  ThumbsUp, 
-  Gauge, 
-  Zap, 
-  BatteryCharging, 
-  Flag, 
-  PackageCheck, 
-  Sparkles, 
-  ShieldCheck, 
-  Trophy,
-  type LucideIcon
-} from "lucide-react";
+import { ArrowRight, Bus, ChevronLeft, ChevronRight, Truck } from "lucide-react";
 
-export interface BannerFeature {
-  icon: LucideIcon;
-  label: string;
-}
+type Theme = "light" | "dark"; // text colour on the coloured block
 
-export interface BannerSlide {
+interface PosterSlide {
   id: string;
-  title: string;
-  subtitle: string;
-  highlightTag?: string;
-  priceTag?: string;
-  ctaText: string;
-  ctaLink: string;
-  imageUrl: string;
-  features?: BannerFeature[];
+  field: string; // background colour of the text block
+  theme: Theme;
+  kicker: string;
+  kickerClass: string;
+  title: [string, string];
+  titleAccent?: string; // colour class for the second line
+  body: string;
+  cta: { label: string; href: string; className: string };
+  secondary: { label: string; href: string };
+  images: { src: string; alt: string; className: string }[];
+  badge?: { big: string; small: string; className: string };
+  caption?: string;
 }
 
-const DEFAULT_SLIDES: BannerSlide[] = [
+const CLOUDINARY = "https://res.cloudinary.com/tj31l4q8/image/upload/f_auto,q_auto,w_900/kushals-mart/products";
+
+// Real catalogue photos on a light "showroom" panel, a bold colour block for the message.
+// No prices on the banners, so they can't go out of date.
+const SLIDES: PosterSlide[] = [
   {
-    id: "1",
-    title: "1:16 SCALE 4WD RC CRAWLERS",
-    subtitle: "EXPLORE OFF-ROAD ADVENTURES WITH HIGH TORQUE & PROPORTIONAL CONTROL",
-    highlightTag: "BIG PRICE DROP",
-    priceTag: "₹5,999",
-    ctaText: "SHOP CRAWLERS NOW",
-    ctaLink: "/category/rc-cars",
-    imageUrl: "/banners/banner1.png",
-    features: [
-      { icon: Settings, label: "4X4 DRIVE" },
-      { icon: Disc, label: "OFFROAD TIRES" },
-      { icon: Lightbulb, label: "ROOF TOP LIGHT" },
-      { icon: ThumbsUp, label: "BEGINNER FRIENDLY" },
-    ],
+    id: "rc",
+    field: "bg-[#D3150F]",
+    theme: "light",
+    kicker: "RC CARS · OFF-ROAD & ON-ROAD",
+    kickerClass: "bg-white/15 text-white",
+    title: ["Off-road ready.", "Remote in hand."],
+    body: "Crawlers, monster trucks and 4×4s with 2.4 GHz remotes and rechargeable batteries.",
+    cta: { label: "Shop RC cars", href: "/category/rc-cars", className: "bg-white text-[#111625] hover:bg-gray-100" },
+    secondary: { label: "View off-road", href: "/category/rc-cars?sub=off-road" },
+    images: [{ src: "/products/thar-rox-yellow-1.webp", alt: "Thar Rox 1:18 RC car", className: "w-[92%] lg:w-[88%]" }],
+    badge: { big: "1:18", small: "SCALE RC", className: "bg-[#111625] text-[#FFC21A] -rotate-6" },
+    caption: "Thar Rox · Full metal body · 15 km/h",
   },
   {
-    id: "2",
-    title: "HIGH-SPEED DESKTOP DRIFT CARS",
-    subtitle: "PRECISION STEERING & GYRO ASSIST FOR INDOOR & TRACK DRIFTING",
-    highlightTag: "NEW ARRIVALS",
-    priceTag: "₹1,499",
-    ctaText: "EXPLORE DRIFT SERIES",
-    ctaLink: "/category/rc-cars",
-    imageUrl: "/banners/banner2.png",
-    features: [
-      { icon: Gauge, label: "GYRO ASSIST" },
-      { icon: Zap, label: "2.4GHz CONTROL" },
-      { icon: BatteryCharging, label: "RECHARGEABLE" },
-      { icon: Flag, label: "EXTRA DRIFT TIRES" },
-    ],
+    id: "drift",
+    field: "bg-[#111625]",
+    theme: "light",
+    kicker: "DRIFT & ON-ROAD RC",
+    kickerClass: "bg-[#FFC21A] text-[#111625]",
+    title: ["Built to slide.", "Made to race."],
+    titleAccent: "text-[#FFC21A]",
+    body: "Drift cars, rally racers and supercars — for the desk, the floor or the track.",
+    cta: { label: "Shop drift cars", href: "/category/rc-cars?sub=on-road", className: "bg-[#FFC21A] text-[#111625] hover:bg-yellow-300" },
+    secondary: { label: "All RC cars", href: "/category/rc-cars" },
+    images: [{ src: "/products/polo-drift-red-1.webp", alt: "1/24 Polo RC drift car", className: "w-[95%] lg:w-[92%]" }],
+    badge: { big: "4WD", small: "1/24 SCALE", className: "bg-[#FFC21A] text-[#111625] rotate-6" },
+    caption: "1/24 Polo RC Drift · 4WD",
   },
   {
-    id: "3",
-    title: "1:64 SCALE DIECAST COLLECTIBLES",
-    subtitle: "HOT WHEELS, TOMICA & MINI GT LIMITED EDITION MODEL CARS",
-    highlightTag: "UP TO 70% OFF",
-    priceTag: "₹499",
-    ctaText: "VIEW COLLECTIBLES",
-    ctaLink: "/category/diecast-metal-cars",
-    imageUrl: "/banners/banner3.png",
-    features: [
-      { icon: PackageCheck, label: "MINT CONDITION" },
-      { icon: Sparkles, label: "AUTHENTIC BRAND" },
-      { icon: ShieldCheck, label: "SAFE PACKAGING" },
-      { icon: Trophy, label: "COLLECTOR EDITION" },
+    id: "diecast",
+    field: "bg-[#FFC21A]",
+    theme: "dark",
+    kicker: "DIECAST METAL COLLECTIBLES",
+    kickerClass: "bg-[#111625] text-[#FFC21A]",
+    title: ["Metal you", "can collect."],
+    body: "Opening doors, pull-back action, lights and sound — scale replicas for the shelf and the playroom.",
+    cta: { label: "Shop diecast", href: "/category/diecast-metal-cars", className: "bg-[#111625] text-white hover:bg-black" },
+    secondary: { label: "See 1/34 & 1/36", href: "/category/diecast-metal-cars?sub=1-34-1-36-scale" },
+    images: [
+      { src: `${CLOUDINARY}/zht6jisxzh9e7wupkhpq`, alt: "1/36 BMW XM diecast model", className: "absolute right-[2%] top-[4%] w-[52%]" },
+      { src: `${CLOUDINARY}/ay6eya5puefjxvndgpu6`, alt: "1/36 Lamborghini Urus diecast model", className: "relative mt-[14%] mr-[24%] w-[68%]" },
     ],
-  },
-  {
-    id: "4",
-    title: "PREMIUM PRO SCALE MODELS & TRUCKS",
-    subtitle: "HEAVY-DUTY DIECAST TRANSPORTERS, HYDRAULICS & PRO RACERS",
-    highlightTag: "PREMIUM COLLECTION",
-    priceTag: "₹9,999",
-    ctaText: "SHOP PREMIUM MODELS",
-    ctaLink: "/category/premium",
-    imageUrl: "/banners/banner1.png",
-    features: [
-      { icon: Trophy, label: "PRO DIECAST" },
-      { icon: ShieldCheck, label: "METAL CHASSIS" },
-      { icon: Sparkles, label: "EXACT SCALE" },
-      { icon: Truck, label: "FREE SHIPPING" },
-    ],
+    badge: { big: "1/34 & 1/36", small: "NEW SCALE", className: "bg-[#D3150F] text-white -rotate-3" },
   },
 ];
 
-/**
- * HeroSlider — Real Car Banner Carousel matching YouCliq:
- * - High-definition dynamic vehicle banner images (/banners/banner1.png, etc.)
- * - Multi-banner slider with auto-play & manual controls (arrows + dots)
- * - Gradient overlay ensuring crisp typography on mobile & desktop
- * - Bottom feature bar strip
- */
-export function HeroSlider({ slides = DEFAULT_SLIDES }: { slides?: BannerSlide[] }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
+const TEXT = {
+  light: { body: "text-white/80", heading: "text-white", ghost: "border-white/50 text-white hover:bg-white/10" },
+  dark: { body: "text-[#3A3320]", heading: "text-[#111625]", ghost: "border-[#111625] text-[#111625] hover:bg-black/5" },
+};
 
-  const nextSlide = useCallback(() => {
-    setCurrentIndex((prev) => (prev + 1) % slides.length);
-  }, [slides.length]);
-
-  const prevSlide = useCallback(() => {
-    setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
-  }, [slides.length]);
-
-  // Fast auto-play timer (3 seconds optimal for e-commerce conversion)
-  useEffect(() => {
-    if (isHovered) return;
-    const interval = setInterval(nextSlide, 3000);
-    return () => clearInterval(interval);
-  }, [nextSlide, isHovered]);
-
-  const activeSlide = slides[currentIndex];
-
+function Poster({ slide }: { slide: PosterSlide }) {
+  const t = TEXT[slide.theme];
   return (
-    <div
-      className="relative w-full overflow-hidden bg-black text-white select-none"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Slider Viewport Container */}
-      <div className="relative min-h-[380px] sm:min-h-[460px] lg:min-h-[540px] w-full flex items-center">
-        
-        {/* Background Image with High-Res Fit */}
-        <img
-          src={activeSlide.imageUrl}
-          alt={activeSlide.title}
-          className="absolute inset-0 h-full w-full object-cover object-center transition-all duration-700 brightness-90"
-        />
-
-        {/* Dark Gradient Overlay for Crisp Text Contrast */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent" />
-
-        {/* Banner Content Overlay Container */}
-        <div className="mx-auto max-w-7xl px-6 py-12 sm:px-12 lg:px-16 w-full relative z-10">
-          <div className="max-w-2xl">
-            
-            {/* Highlight Tag */}
-            {activeSlide.highlightTag && (
-              <div className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-1.5 text-xs font-black uppercase tracking-wider text-white shadow-lg mb-4 animate-fade-in">
-                <Flame className="h-3.5 w-3.5 fill-white" />
-                <span>{activeSlide.highlightTag}</span>
-              </div>
-            )}
-
-            {/* Title */}
-            <h1 className="font-extrabold text-3xl sm:text-5xl lg:text-6xl tracking-tight text-white leading-tight uppercase animate-fade-in drop-shadow-md">
-              {activeSlide.title}
-            </h1>
-
-            {/* Subtitle */}
-            <p className="mt-3 text-xs sm:text-base font-semibold text-gray-200 tracking-wide uppercase max-w-xl animate-fade-in drop-shadow">
-              {activeSlide.subtitle}
-            </p>
-
-            {/* Price Tag */}
-            {activeSlide.priceTag && (
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">STARTING AT</span>
-                <span className="font-extrabold text-3xl sm:text-4xl text-yellow-400 drop-shadow">
-                  {activeSlide.priceTag}
-                </span>
-              </div>
-            )}
-
-            {/* CTA Buttons */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link
-                href={activeSlide.ctaLink}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-3.5 text-xs sm:text-sm font-black uppercase tracking-wider text-black shadow-2xl transition-all duration-300 hover:bg-gray-100 hover:scale-105"
-              >
-                {activeSlide.ctaText} →
-              </Link>
-              <Link
-                href="/track-order"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-3.5 text-xs sm:text-sm font-black uppercase tracking-wider text-white shadow-xl transition-all duration-300 hover:bg-red-700 hover:scale-105"
-              >
-                <Truck className="h-4 w-4" />
-                <span>TRACK ORDER</span>
-              </Link>
-            </div>
+    <div className="relative flex min-h-[620px] flex-col lg:min-h-[540px] lg:flex-row bg-[#EFEDE8]">
+      {/* Message block (slanted edge on desktop) */}
+      <div className={`relative z-10 ${slide.field} px-6 pt-10 pb-12 sm:px-12 lg:w-[57%] lg:px-16 lg:py-16 lg:[clip-path:polygon(0_0,100%_0,84%_100%,0_100%)]`}>
+        <div className="max-w-[560px] space-y-5">
+          <span className={`inline-block rounded-full px-3.5 py-1.5 text-[11px] sm:text-xs font-extrabold tracking-[0.12em] ${slide.kickerClass}`}>
+            {slide.kicker}
+          </span>
+          <h2 className={`font-display text-[44px] sm:text-6xl lg:text-[76px] font-extrabold leading-[0.95] tracking-tight ${t.heading}`}>
+            {slide.title[0]}
+            <br />
+            <span className={slide.titleAccent}>{slide.title[1]}</span>
+          </h2>
+          <p className={`max-w-[460px] text-base sm:text-lg font-semibold leading-relaxed ${t.body}`}>{slide.body}</p>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Link
+              href={slide.cta.href}
+              className={`inline-flex min-h-[52px] items-center gap-2 rounded-2xl px-6 text-sm font-extrabold tracking-wide shadow-lg transition-all hover:scale-[1.02] ${slide.cta.className}`}
+            >
+              {slide.cta.label} <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href={slide.secondary.href}
+              className={`inline-flex min-h-[52px] items-center rounded-2xl border-2 px-5 text-sm font-bold transition-colors ${t.ghost}`}
+            >
+              {slide.secondary.label}
+            </Link>
           </div>
         </div>
-
-        {/* Feature Badges Strip */}
-        {activeSlide.features && (
-          <div className="absolute bottom-4 left-0 right-0 z-20 hidden md:block">
-            <div className="mx-auto max-w-4xl bg-black/75 backdrop-blur-md rounded-2xl border border-white/10 px-6 py-2.5 flex items-center justify-between text-xs font-bold tracking-wider text-gray-100 shadow-xl">
-              {activeSlide.features.map((feat, i) => {
-                const IconComponent = feat.icon;
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <IconComponent className="h-4 w-4 text-red-500" />
-                    <span>{feat.label}</span>
-                    {i < activeSlide.features!.length - 1 && (
-                      <span className="text-gray-600 ml-4">|</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Navigation Arrow Buttons (Left & Right) */}
+      {/* Showroom: the real product photo (white background blends into the panel) */}
+      <div className="relative flex flex-1 items-center justify-center px-4 py-8 lg:absolute lg:inset-y-0 lg:right-0 lg:w-[56%] lg:py-10">
+        {slide.images.map((img) => (
+          // eslint-disable-next-line @next/next/no-img-element -- remote product photos, blended with CSS
+          <img key={img.src} src={img.src} alt={img.alt} className={`h-auto mix-blend-multiply ${img.className}`} loading="lazy" />
+        ))}
+        {slide.badge && (
+          <div className={`absolute right-4 top-4 lg:right-12 lg:top-10 flex flex-col items-center justify-center rounded-2xl px-4 py-3 shadow-lg ${slide.badge.className}`}>
+            <span className="font-display text-xl sm:text-3xl font-extrabold leading-none">{slide.badge.big}</span>
+            <span className="mt-1 text-[10px] sm:text-[11px] font-extrabold tracking-[0.12em]">{slide.badge.small}</span>
+          </div>
+        )}
+        {slide.caption && (
+          <p className="absolute bottom-4 right-6 lg:bottom-8 lg:right-12 text-xs sm:text-sm font-bold text-[#3B4152]">{slide.caption}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeliveryPoster() {
+  return (
+    <div className="relative flex min-h-[620px] flex-col lg:min-h-[540px] lg:flex-row bg-[#EFEDE8]">
+      <div className="relative z-10 bg-[#111625] px-6 pt-10 pb-12 text-white sm:px-12 lg:w-[57%] lg:px-16 lg:py-14 lg:[clip-path:polygon(0_0,100%_0,84%_100%,0_100%)]">
+        <div className="max-w-[580px] space-y-4">
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#FFC21A] px-3.5 py-1.5 text-[11px] sm:text-xs font-extrabold tracking-[0.12em] text-[#111625]">
+            <Bus className="h-4 w-4" /> FAST DELIVERY BY APSRTC
+          </span>
+          <div className="flex items-end gap-3 font-display">
+            <span className="text-[96px] sm:text-[136px] lg:text-[150px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A]">24–48</span>
+            <span className="pb-2 text-3xl sm:text-5xl font-extrabold">hours</span>
+          </div>
+          <h2 className="font-display text-2xl sm:text-4xl font-bold leading-tight">
+            to your door across
+            <br />
+            Andhra Pradesh &amp; Telangana.
+          </h2>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Link href="/shop" className="inline-flex min-h-[52px] items-center gap-2 rounded-2xl bg-white px-6 text-sm font-extrabold tracking-wide text-[#111625] shadow-lg hover:bg-gray-100 transition-colors">
+              Start shopping <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="/track-order" className="inline-flex min-h-[52px] items-center rounded-2xl border-2 border-white/40 px-5 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+              Track your order
+            </Link>
+          </div>
+        </div>
+      </div>
+      <div className="relative flex flex-1 flex-col justify-center gap-4 px-6 py-8 sm:px-12 lg:absolute lg:inset-y-0 lg:right-0 lg:w-[40%] lg:px-0 lg:pr-12">
+        <div className="flex items-center gap-4 rounded-3xl border-[3px] border-[#D3150F] bg-white p-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#D3150F] text-white"><Bus className="h-7 w-7" /></div>
+          <div>
+            <p className="text-[11px] font-extrabold tracking-[0.12em] text-red-700">ANDHRA PRADESH &amp; TELANGANA</p>
+            <p className="font-display text-2xl sm:text-3xl font-extrabold text-[#111625]">24–48 hours</p>
+            <p className="text-sm font-semibold text-gray-600">Delivered by APSRTC</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 rounded-3xl border-[3px] border-[#E0DCD3] bg-white p-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#111625] text-[#FFC21A]"><Truck className="h-7 w-7" /></div>
+          <div>
+            <p className="text-[11px] font-extrabold tracking-[0.12em] text-gray-600">REST OF INDIA</p>
+            <p className="font-display text-2xl sm:text-3xl font-extrabold text-[#111625]">3–5 business days</p>
+            <p className="text-sm font-semibold text-gray-600">Delivered by Delhivery</p>
+          </div>
+        </div>
+        <p className="text-sm font-bold text-[#3B4152]">Free shipping on every order · Live tracking with your phone number</p>
+      </div>
+    </div>
+  );
+}
+
+const SLIDE_COUNT = SLIDES.length + 1; // + the APSRTC delivery poster
+
+/** Homepage hero carousel: three product posters plus the APSRTC delivery poster. */
+export function HeroSlider() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const nextSlide = useCallback(() => setCurrentIndex((prev) => (prev + 1) % SLIDE_COUNT), []);
+  const prevSlide = useCallback(() => setCurrentIndex((prev) => (prev - 1 + SLIDE_COUNT) % SLIDE_COUNT), []);
+
+  // Long enough to read a poster
+  useEffect(() => {
+    if (isPaused) return;
+    const interval = setInterval(nextSlide, 6000);
+    return () => clearInterval(interval);
+  }, [nextSlide, isPaused]);
+
+  return (
+    <section
+      aria-roledescription="carousel"
+      aria-label="Featured collections"
+      className="relative w-full overflow-hidden select-none"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      <div className="animate-fade-in" key={currentIndex}>
+        {currentIndex < SLIDES.length ? <Poster slide={SLIDES[currentIndex]} /> : <DeliveryPoster />}
+      </div>
+
       <button
         onClick={prevSlide}
         aria-label="Previous slide"
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white text-gray-900 shadow-2xl transition-all hover:scale-110 hover:bg-gray-100 focus:outline-none"
+        className="absolute left-3 top-1/2 z-30 hidden sm:flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-xl transition-all hover:scale-110 hover:bg-white"
       >
         <ChevronLeft className="h-6 w-6" />
       </button>
-
       <button
         onClick={nextSlide}
         aria-label="Next slide"
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white text-gray-900 shadow-2xl transition-all hover:scale-110 hover:bg-gray-100 focus:outline-none"
+        className="absolute right-3 top-1/2 z-30 hidden sm:flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-xl transition-all hover:scale-110 hover:bg-white"
       >
         <ChevronRight className="h-6 w-6" />
       </button>
 
-      {/* Dot Indicators */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
-        {slides.map((_, idx) => (
+      <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/25 px-3 py-2 backdrop-blur-sm">
+        {Array.from({ length: SLIDE_COUNT }, (_, idx) => (
           <button
             key={idx}
             onClick={() => setCurrentIndex(idx)}
             aria-label={`Go to slide ${idx + 1}`}
-            className={`h-2.5 rounded-full transition-all duration-300 ${
-              idx === currentIndex
-                ? "w-8 bg-white"
-                : "w-2.5 bg-white/50 hover:bg-white/80"
-            }`}
+            aria-current={idx === currentIndex}
+            className={`h-2.5 rounded-full transition-all duration-300 ${idx === currentIndex ? "w-8 bg-white" : "w-2.5 bg-white/60 hover:bg-white/90"}`}
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

@@ -5,6 +5,7 @@ import { WhatsAppButton } from "@/components/storefront/whatsapp-button";
 import { CartProvider } from "@/lib/cart-context";
 import { CartDrawer } from "@/components/storefront/cart-drawer";
 import { NavigationProgress } from "@/components/storefront/navigation-progress";
+import { DeliveryPopup } from "@/components/storefront/delivery-popup";
 
 /**
  * Layout wrapper for all customer-facing storefront pages.
@@ -25,6 +26,7 @@ export default function StorefrontLayout({
       <Footer />
       <WhatsAppButton />
       <CartDrawer />
+      <DeliveryPopup />
     </CartProvider>
   );
 }

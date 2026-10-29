@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ShoppingCart, Search, Flame, ChevronDown, Phone, Mail, Menu, X, Truck } from "lucide-react";
+import { ShoppingCart, Search, Flame, Phone, Menu, X, Truck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useCart } from "@/lib/cart-context";
 import { SearchModal } from "@/components/storefront/search-modal";
@@ -30,19 +30,21 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm">
       {/* Top mini-bar */}
-      <div className="bg-[#F8F9FA] border-b border-gray-100 py-1.5 text-xs text-gray-600">
-        <div className="mx-auto max-w-7xl px-4 flex items-center justify-center gap-6 sm:gap-8 font-medium">
-          <a href="tel:+917288907757" className="flex items-center gap-1.5 hover:text-red-600 transition-colors">
-            <Phone className="h-3.5 w-3.5 text-red-600" />
+      <div className="bg-[#111625] py-2 text-xs text-white">
+        <div className="mx-auto max-w-7xl px-4 flex items-center justify-center gap-3 sm:gap-5 font-semibold text-center">
+          <span className="flex items-center gap-1.5">
+            <Truck className="h-4 w-4 shrink-0 text-[#FFC21A]" />
+            <span>
+              <span className="text-[#FFC21A] font-bold">24–48 hr delivery</span> across Andhra Pradesh &amp; Telangana by APSRTC
+            </span>
+          </span>
+          <span className="hidden md:inline text-gray-500">·</span>
+          <span className="hidden md:inline text-gray-300">Free shipping across India</span>
+          <span className="hidden lg:inline text-gray-500">·</span>
+          <a href="tel:+917288907757" className="hidden lg:flex items-center gap-1.5 text-gray-300 hover:text-white transition-colors">
+            <Phone className="h-3.5 w-3.5" />
             <span>+91 72889 07757</span>
           </a>
-          <span className="text-gray-300">|</span>
-          <a href="mailto:jogabetha@gmail.com" className="flex items-center gap-1.5 hover:text-red-600 transition-colors hidden sm:flex">
-            <Mail className="h-3.5 w-3.5 text-red-600" />
-            <span>jogabetha@gmail.com</span>
-          </a>
-          <span className="text-gray-300 hidden sm:inline">|</span>
-          <span className="text-gray-500 font-semibold">Free Shipping Across India</span>
         </div>
       </div>
 

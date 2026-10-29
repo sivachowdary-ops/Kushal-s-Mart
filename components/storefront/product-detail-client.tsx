@@ -170,7 +170,10 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   };
 
   const checkPincode = () => {
-    if (/^[1-9]\d{5}$/.test(pincode)) {
+    if (/^5[0-3]\d{4}$/.test(pincode)) {
+      // Telangana (50xxxx) and Andhra Pradesh (51xxxx–53xxxx)
+      setDeliveryResult({ ok: true, text: "Delivery in 24–48 hours by APSRTC (Andhra Pradesh & Telangana)." });
+    } else if (/^[1-9]\d{5}$/.test(pincode)) {
       setDeliveryResult({ ok: true, text: "Estimated Delivery in 3-5 Business Days across India." });
     } else {
       setDeliveryResult({ ok: false, text: "Please enter a valid 6-digit Indian PIN code." });
