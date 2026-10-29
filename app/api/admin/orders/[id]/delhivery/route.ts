@@ -60,9 +60,20 @@ export async function POST(
       pincode?: string;
     } | null;
 
-    if (!shippingAddress?.address || !shippingAddress?.pincode) {
+    // Every field Delhivery needs must be real. This used to fill gaps with "Kochi", "Kerala" and
+    // phone 9999999999, which booked parcels to the wrong city with an unreachable phone number.
+    const phone = (order.customer_phone || "").replace(/\D/g, "").slice(-10);
+    const missing = [
+      !order.customer_name?.trim() && "customer name",
+      !/^[6-9]\d{9}$/.test(phone) && "a valid 10-digit phone",
+      !shippingAddress?.address?.trim() && "street address",
+      !shippingAddress?.city?.trim() && "city",
+      !shippingAddress?.state?.trim() && "state",
+      !/^\d{6}$/.test(shippingAddress?.pincode || "") && "a 6-digit PIN code",
+    ].filter(Boolean);
+    if (missing.length > 0 || !shippingAddress) {
       return NextResponse.json(
-        { error: "Order has incomplete shipping address for Delhivery dispatch" },
+        { error: `Can't dispatch — the order is missing ${missing.join(", ")}. Correct the order details first.` },
         { status: 400 }
       );
     }
@@ -71,14 +82,14 @@ export async function POST(
     const result = await createDelhiveryShipment({
       orderId: id,
       orderNumber: order.order_number,
-      customerName: order.customer_name || "Valued Customer",
-      customerPhone: order.customer_phone || "9999999999",
+      customerName: order.customer_name.trim(),
+      customerPhone: phone,
       customerEmail: order.customer_email || undefined,
       shippingAddress: {
-        address: shippingAddress.address,
-        city: shippingAddress.city || "Kochi",
-        state: shippingAddress.state || "Kerala",
-        pincode: shippingAddress.pincode,
+        address: shippingAddress.address!.trim(),
+        city: shippingAddress.city!.trim(),
+        state: shippingAddress.state!.trim(),
+        pincode: shippingAddress.pincode!,
       },
       items: (order.order_items || []).map((i) => ({
         productName: i.product_name,
