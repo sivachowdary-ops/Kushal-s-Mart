@@ -1,18 +1,37 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getDelhiveryTrackingStatus } from "@/lib/delhivery";
+import { applyTrackingToOrder } from "@/lib/tracking-sync";
+import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 
+/**
+ * GET /api/orders/[orderNumber]/tracking
+ * Public live Delhivery tracking for the Track Order page. Rate-limited per IP because each call
+ * can reach Delhivery and update the order.
+ */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ orderNumber: string }> }
 ) {
+  const rl = checkRateLimit(`tracking:${getClientIp(request)}`, RATE_LIMITS.tracking);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Too many tracking requests. Try again in ${rl.retryAfterSeconds} seconds.` },
+      { status: 429 }
+    );
+  }
+
   try {
     const { orderNumber } = await params;
+    if (!/^KM-[A-Z0-9-]{4,30}$/i.test(orderNumber)) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
     const { data: order, error } = await supabaseAdmin
       .from("Order")
       .select("id, orderNumber, shiprocketAwb, courierName, status, timeline")
       .eq("orderNumber", orderNumber)
-      .single();
+      .maybeSingle();
 
     if (error || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     if (!order.shiprocketAwb || order.shiprocketAwb.startsWith("KM-") || order.shiprocketAwb === order.orderNumber) {
@@ -20,16 +39,8 @@ export async function GET(
     }
 
     const tracking = await getDelhiveryTrackingStatus(order.shiprocketAwb);
-
-    const newStatus = mapStageToStatus(tracking.currentStage);
-    if (tracking.success && newStatus && newStatus !== order.status && !["DELIVERED","CANCELLED","COMPLETED"].includes(order.status)) {
-      const now = new Date().toISOString();
-      const existingTimeline = (order.timeline as Array<{ status: string; timestamp: string; note?: string }>) || [];
-      const lastEntry = existingTimeline[existingTimeline.length - 1];
-      const newTimeline = lastEntry?.status === newStatus ? existingTimeline : [...existingTimeline, { status: newStatus, timestamp: now, note: getTimelineNote(tracking.currentStage, tracking.currentStatus) }];
-      await supabaseAdmin.from("Order").update({ status: newStatus, timeline: newTimeline, updatedAt: now }).eq("id", order.id);
-      console.log(`[Tracking] ${orderNumber}: auto-updated ${order.status} -> ${newStatus}`);
-    }
+    const updatedTo = await applyTrackingToOrder(order, tracking);
+    if (updatedTo) console.log(`[Tracking] ${orderNumber}: ${order.status} -> ${updatedTo}`);
 
     return NextResponse.json({
       success: tracking.success,
@@ -44,22 +55,7 @@ export async function GET(
       trackingUrl: `https://www.delhivery.com/track/package/${order.shiprocketAwb}`,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to fetch tracking";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[Tracking] Error:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Failed to fetch tracking" }, { status: 500 });
   }
-}
-
-function mapStageToStatus(stage: string): "PACKED" | "SHIPPED" | "DELIVERED" | null {
-  if (stage === "PACKED") return "PACKED";
-  if (stage === "SHIPPED" || stage === "OUT_FOR_DELIVERY") return "SHIPPED";
-  if (stage === "DELIVERED") return "DELIVERED";
-  return null;
-}
-
-function getTimelineNote(stage: string, rawStatus: string): string {
-  if (stage === "PACKED") return "Package picked up by Delhivery Express";
-  if (stage === "SHIPPED") return `In transit with Delhivery Express (${rawStatus})`;
-  if (stage === "OUT_FOR_DELIVERY") return "Out for delivery - arriving today!";
-  if (stage === "DELIVERED") return "Package delivered successfully";
-  return rawStatus;
 }

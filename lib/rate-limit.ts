@@ -69,6 +69,8 @@ export const RATE_LIMITS = {
   orderCreate: { maxRequests: 10, windowSeconds: 15 * 60 } as RateLimitConfig,
   /** Track orders: 20 lookups per 15 minutes */
   trackOrders: { maxRequests: 20, windowSeconds: 15 * 60 } as RateLimitConfig,
+  /** Live courier tracking: 60 per 15 minutes (a lookup can fetch several orders' tracking) */
+  tracking: { maxRequests: 60, windowSeconds: 15 * 60 } as RateLimitConfig,
   /** File upload: 30 uploads per 15 minutes */
   upload: { maxRequests: 30, windowSeconds: 15 * 60 } as RateLimitConfig,
 } as const;

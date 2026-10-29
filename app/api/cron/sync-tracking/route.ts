@@ -1,19 +1,31 @@
-﻿import { NextResponse } from "next/server";
+﻿import { timingSafeEqual } from "crypto";
+import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getDelhiveryTrackingStatus } from "@/lib/delhivery";
+import { applyTrackingToOrder } from "@/lib/tracking-sync";
+
+export const maxDuration = 60;
+
+/** Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` when CRON_SECRET is set in the project. */
+function isAuthorizedCron(request: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false; // fail closed — without a secret anyone could trigger this job
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const received = Buffer.from(request.headers.get("authorization") || "");
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
 
 /**
  * GET /api/cron/sync-tracking
  *
- * Vercel Cron Job - runs every hour automatically.
- * Fetches live Delhivery tracking for all active orders with AWB
- * and updates order status in DB without any admin involvement.
+ * Vercel Cron Job (daily, see vercel.json). Fetches live Delhivery tracking for active orders
+ * with an AWB and updates their status without any admin involvement.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET || "";
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCron(request)) {
+    if (!process.env.CRON_SECRET) {
+      console.error("[Cron] CRON_SECRET is not set — refusing to run. Add it in Vercel → Settings → Environment Variables.");
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -21,15 +33,16 @@ export async function GET(request: Request) {
 
   const { data: activeOrders, error } = await supabaseAdmin
     .from("Order")
-    .select("id, orderNumber, shiprocketAwb, status")
+    .select("id, orderNumber, shiprocketAwb, status, timeline")
     .not("shiprocketAwb", "is", null)
-    .not("status", "in", '("DELIVERED","CANCELLED","COMPLETED")')
+    .in("status", ["PAID", "PROCESSING", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY"])
     // Least recently updated first, so every shipment gets its turn when there are more than 50
     .order("updatedAt", { ascending: true })
     .limit(50);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[Cron] Order query failed:", error.message);
+    return NextResponse.json({ error: "Order query failed" }, { status: 500 });
   }
 
   if (!activeOrders || activeOrders.length === 0) {
@@ -42,42 +55,12 @@ export async function GET(request: Request) {
   for (const order of activeOrders) {
     try {
       const tracking = await getDelhiveryTrackingStatus(order.shiprocketAwb);
-
       if (!tracking.success) {
         failed++;
         continue;
       }
-
-      const newStatus = mapDelhiveryStageToStatus(tracking.currentStage);
-
-      if (newStatus && newStatus !== order.status) {
-        const now = new Date().toISOString();
-
-        const { data: existing } = await supabaseAdmin
-          .from("Order")
-          .select("timeline")
-          .eq("id", order.id)
-          .single();
-
-        const existingTimeline = (existing?.timeline as Array<{ status: string; timestamp: string; note?: string }>) || [];
-        const lastEntry = existingTimeline[existingTimeline.length - 1];
-
-        const newTimeline = lastEntry?.status === newStatus
-          ? existingTimeline
-          : [
-              ...existingTimeline,
-              {
-                status: newStatus,
-                timestamp: now,
-                note: getTimelineNote(tracking.currentStage, tracking.currentStatus),
-              },
-            ];
-
-        await supabaseAdmin
-          .from("Order")
-          .update({ status: newStatus, timeline: newTimeline, updatedAt: now })
-          .eq("id", order.id);
-
+      const newStatus = await applyTrackingToOrder(order, tracking);
+      if (newStatus) {
         console.log(`[Cron] ${order.orderNumber}: ${order.status} -> ${newStatus}`);
         updated++;
       }
@@ -85,7 +68,7 @@ export async function GET(request: Request) {
       console.error(`[Cron] ${order.orderNumber}: error`, err);
       failed++;
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 150)); // be gentle with the Delhivery API
   }
 
   return NextResponse.json({
@@ -93,19 +76,4 @@ export async function GET(request: Request) {
     updated,
     failed,
   });
-}
-
-function mapDelhiveryStageToStatus(stage: string): "PACKED" | "SHIPPED" | "DELIVERED" | null {
-  if (stage === "PACKED") return "PACKED";
-  if (stage === "SHIPPED" || stage === "OUT_FOR_DELIVERY") return "SHIPPED";
-  if (stage === "DELIVERED") return "DELIVERED";
-  return null;
-}
-
-function getTimelineNote(stage: string, rawStatus: string): string {
-  if (stage === "PACKED") return "Package picked up by Delhivery Express";
-  if (stage === "SHIPPED") return `In transit with Delhivery Express (${rawStatus})`;
-  if (stage === "OUT_FOR_DELIVERY") return "Out for delivery - arriving today!";
-  if (stage === "DELIVERED") return "Package delivered successfully";
-  return rawStatus;
 }
