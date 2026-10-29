@@ -25,8 +25,9 @@ export async function GET(request: Request) {
   }
 
   if (searchQuery) {
-    // Sanitize search input: strip PostgREST-special characters to prevent filter injection
-    const sanitized = searchQuery.trim().replace(/[.,()"'\\;]/g, "").slice(0, 100);
+    // Sanitize search input: strip PostgREST-special characters to prevent filter injection,
+    // and the ilike wildcards (% * _) so a search for "%" doesn't match every product
+    const sanitized = searchQuery.trim().replace(/[.,()"'\\;%*_]/g, "").slice(0, 100);
     if (sanitized.length > 0) {
       query = query.or(`name.ilike.%${sanitized}%,brand.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
     }
