@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAdminStore } from "@/lib/admin-store";
 import { formatDateShort, formatTime } from "@/lib/utils";
+import { channelLabel, isPaymentPending, needsDispatch, orderStatusClass, orderStatusLabel } from "@/lib/admin-ui";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer } from "lucide-react";
 
+// useSearchParams needs a Suspense boundary
 export default function OrdersPage() {
+  return (
+    <Suspense fallback={null}>
+      <OrdersList />
+    </Suspense>
+  );
+}
+
+function OrdersList() {
   const { orders, isLoading, error, refreshOrders } = useAdminStore();
+  const router = useRouter();
+  // The dashboard's "Needs action" tiles link here with ?status=...
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "ALL");
   const [channelFilter, setChannelFilter] = useState("ALL");
-  const [showPending, setShowPending] = useState(false);
 
   useEffect(() => {
     refreshOrders();
@@ -31,11 +44,9 @@ export default function OrdersPage() {
       matchesStatus = o.status !== "PENDING_PAYMENT" && o.status !== "PAYMENT_FAILED";
     } else if (statusFilter === "NEEDS_SHIPMENT") {
       // Counter (POS) sales are handed over in store — they never need a courier
-      matchesStatus =
-        o.channel !== "OFFLINE" &&
-        (o.payment_status === "PAID" || o.status === "PAID") &&
-        !o.shiprocket_awb &&
-        o.status !== "CANCELLED";
+      matchesStatus = needsDispatch(o);
+    } else if (statusFilter === "PAYMENT_PENDING") {
+      matchesStatus = isPaymentPending(o);
     } else {
       matchesStatus = o.status === statusFilter;
     }
@@ -52,24 +63,8 @@ export default function OrdersPage() {
     );
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING': return 'bg-yellow-50 text-yellow-700 ring-yellow-600/20';
-      case 'PENDING_PAYMENT': return 'bg-amber-50 text-amber-800 ring-amber-600/20';
-      case 'PAYMENT_FAILED':
-      case 'FAILED': return 'bg-red-100 text-red-800 ring-red-600/30';
-      case 'PACKED': return 'bg-purple-50 text-purple-700 ring-purple-600/20';
-      case 'PROCESSING': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
-      case 'SHIPPED': return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
-      case 'DELIVERED': return 'bg-green-50 text-green-700 ring-green-600/20';
-      case 'CANCELLED': return 'bg-red-50 text-red-700 ring-red-600/20';
-      case 'COMPLETED': return 'bg-emerald-50 text-emerald-700 ring-emerald-600/20';
-      default: return 'bg-slate-50 text-slate-700 ring-slate-600/20';
-    }
-  };
-
   return (
-    <div className="space-y-6 bg-[#F4F5F7] min-h-screen p-8">
+    <div className="space-y-6 bg-[#F4F5F7] min-h-screen p-4 sm:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-slate-900">Orders</h1>
       </div>
@@ -82,7 +77,7 @@ export default function OrdersPage() {
       )}
 
       <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -93,7 +88,7 @@ export default function OrdersPage() {
               className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-4">
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
@@ -101,7 +96,7 @@ export default function OrdersPage() {
             >
               <option value="ALL">All Channels</option>
               <option value="ONLINE">Online Store</option>
-              <option value="OFFLINE">POS (Offline)</option>
+              <option value="OFFLINE">Counter (POS)</option>
             </select>
             <select
               value={statusFilter}
@@ -110,6 +105,7 @@ export default function OrdersPage() {
             >
               <option value="ALL">All Statuses</option>
               <option value="NEEDS_SHIPMENT">📦 Needs Shipment (Paid, No AWB)</option>
+              <option value="PAYMENT_PENDING">Payment pending (COD or unpaid)</option>
               <option value="PAID">Paid</option>
               <option value="PACKED">Packed (AWB Generated)</option>
               <option value="PENDING">Pending</option>
@@ -143,7 +139,41 @@ export default function OrdersPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per order, the whole card opens it */}
+          <ul className="divide-y divide-slate-200 md:hidden">
+            {filteredOrders.map((order) => (
+              <li key={order.id}>
+                <Link href={`/admin/orders/${order.id}`} className="block px-4 py-4 active:bg-slate-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{order.customer_name || "Guest"}</p>
+                      <p className="text-xs text-slate-500">{order.order_number}</p>
+                      <p className="text-xs text-slate-400">{formatDateShort(order.created_at)}, {formatTime(order.created_at)} · {channelLabel(order.channel)}</p>
+                    </div>
+                    <p className="shrink-0 font-bold text-slate-900">₹{(order.total / 100).toLocaleString("en-IN")}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${orderStatusClass(order.status)}`}>
+                      {orderStatusLabel(order.status)}
+                    </span>
+                    {needsDispatch(order) && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        Needs dispatch
+                      </span>
+                    )}
+                    {order.payment_status !== "PAID" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        Payment {orderStatusLabel(order.payment_status || "PENDING").toLowerCase()}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
@@ -158,7 +188,11 @@ export default function OrdersPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={order.id}
+                    onClick={() => router.push(`/admin/orders/${order.id}`)}
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-4 font-medium text-slate-900">
                       {order.order_number}
                     </td>
@@ -178,16 +212,16 @@ export default function OrdersPage() {
                       ) : (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-600/20">
                           <Store className="h-3 w-3" />
-                          POS
+                          Counter
                         </span>
                       )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-start gap-1">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${getStatusColor(order.status)}`}>
-                          {order.status === "PAYMENT_FAILED" ? "PAYMENT FAILED" : order.status === "PENDING_PAYMENT" ? "PENDING PAYMENT" : order.status}
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${orderStatusClass(order.status)}`}>
+                          {orderStatusLabel(order.status)}
                         </span>
-                        {(order.payment_status === "PAID" || order.status === "PAID") && !order.shiprocket_awb && order.channel !== "OFFLINE" && (
+                        {needsDispatch(order) && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
                             NEEDS DISPATCH
                           </span>
@@ -218,7 +252,8 @@ export default function OrdersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                      {/* Icon links keep their own job instead of opening the row */}
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         <Link
                           href={`/admin/orders/${order.id}/kot`}
                           target="_blank"
@@ -241,6 +276,7 @@ export default function OrdersPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

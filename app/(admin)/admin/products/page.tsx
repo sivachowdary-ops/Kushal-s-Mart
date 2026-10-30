@@ -1,16 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAdminStore } from "@/lib/admin-store";
+import { Suspense, useEffect, useState } from "react";
+import { useAdminStore, type AdminProduct } from "@/lib/admin-store";
+import { productStock, productVariants } from "@/lib/admin-ui";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, Search, Edit, Trash2, Tag, AlertCircle, Cloud } from "lucide-react";
 import { supabase } from "@/lib/supabase-client";
 
+/** Stock pill: red when sold out, amber when any variant is at or below its limit. */
+function StockBadge({ product }: { product: AdminProduct }) {
+  const { total, low, out, lowVariants } = productStock(product);
+  const tone = out
+    ? "bg-red-50 text-red-700 ring-red-600/20"
+    : low
+    ? "bg-amber-50 text-amber-800 ring-amber-600/20"
+    : "bg-slate-50 text-slate-700 ring-slate-500/20";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset ${tone}`}>
+      {out
+        ? "Out of stock"
+        : low && productVariants(product).length > 1
+        ? `${total} in stock · ${lowVariants} ${lowVariants === 1 ? "variant" : "variants"} low`
+        : `${total} in stock`}
+    </span>
+  );
+}
+
+// useSearchParams needs a Suspense boundary
 export default function ProductsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProductsList />
+    </Suspense>
+  );
+}
+
+function ProductsList() {
   const { products, categories, subcategories, isLoading, error, refreshProducts, deleteProduct } = useAdminStore();
+  // The dashboard's low-stock links open this page with ?stock=low
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [subcategoryFilter, setSubcategoryFilter] = useState("ALL");
+  const [stockFilter, setStockFilter] = useState(searchParams.get("stock") || "ALL");
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
@@ -80,7 +113,12 @@ export default function ProductsPage() {
     const matchesSubcategory = subcategoryFilter === "ALL" || 
                                p.sub_category_id === subcategoryFilter ||
                                p.sub_category_slug === subcategoryFilter;
-    return matchesSearch && matchesCategory && matchesSubcategory;
+    const stock = productStock(p);
+    const matchesStock =
+      stockFilter === "ALL" ||
+      (stockFilter === "low" && (stock.low || stock.out)) ||
+      (stockFilter === "out" && stock.out);
+    return matchesSearch && matchesCategory && matchesSubcategory && matchesStock;
   });
 
   const handleDelete = async (id: string) => {
@@ -110,10 +148,10 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="space-y-6 bg-[#F4F5F7] min-h-screen p-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 bg-[#F4F5F7] min-h-screen p-4 sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold text-slate-900">Products</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleMigrateImages}
             disabled={isMigrating}
@@ -141,7 +179,7 @@ export default function ProductsPage() {
       )}
 
       <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-slate-200 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -185,6 +223,15 @@ export default function ProductsPage() {
                   </option>
                 ))}
             </select>
+            <select
+              value={stockFilter}
+              onChange={(e) => setStockFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="ALL">All stock</option>
+              <option value="low">Low or out of stock</option>
+              <option value="out">Out of stock</option>
+            </select>
           </div>
         </div>
 
@@ -193,12 +240,13 @@ export default function ProductsPage() {
             <Tag className="mb-4 h-12 w-12 text-slate-300" />
             <p className="text-lg font-medium text-slate-900">No products found</p>
             <p className="mt-1">No products yet — add your first product</p>
-            {search || categoryFilter !== "ALL" || subcategoryFilter !== "ALL" ? (
+            {search || categoryFilter !== "ALL" || subcategoryFilter !== "ALL" || stockFilter !== "ALL" ? (
               <button
                 onClick={() => {
                   setSearch("");
                   setCategoryFilter("ALL");
                   setSubcategoryFilter("ALL");
+                  setStockFilter("ALL");
                 }}
                 className="mt-4 text-blue-600 hover:underline"
               >
@@ -214,13 +262,61 @@ export default function ProductsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per product */}
+          <ul className="divide-y divide-slate-200 md:hidden">
+            {filteredProducts.map((product) => {
+              const category = categories.find((c) => c.id === product.category_id);
+              const isProductDeleting = isDeleting === product.id;
+              return (
+                <li key={product.id} className="flex items-center gap-3 px-4 py-3">
+                  <Link href={`/admin/products/${product.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                      {product.images && product.images[0] ? (
+                        <img src={product.images[0]} alt={product.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400">
+                          <Tag className="h-6 w-6" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-medium text-slate-900">{product.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        ₹{(product.selling_price / 100).toLocaleString("en-IN")}
+                        {category ? ` · ${category.name}` : ""}
+                        {!product.is_active ? " · Draft" : ""}
+                      </p>
+                      <div className="mt-1">
+                        <StockBadge product={product} />
+                      </div>
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    disabled={isProductDeleting}
+                    aria-label={`Delete ${product.name}`}
+                    className="shrink-0 p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                  >
+                    {isProductDeleting ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full min-w-[650px] text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-6 py-4 font-medium">Product</th>
                   <th className="px-6 py-4 font-medium">Category</th>
                   <th className="px-6 py-4 font-medium">Price</th>
+                  <th className="px-6 py-4 font-medium">Stock</th>
                   <th className="px-6 py-4 font-medium">Status</th>
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
@@ -280,6 +376,9 @@ export default function ProductsPage() {
                         ₹{(product.selling_price / 100).toLocaleString("en-IN")}
                       </td>
                       <td className="px-6 py-4">
+                        <StockBadge product={product} />
+                      </td>
+                      <td className="px-6 py-4">
                         {product.is_active ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
@@ -319,6 +418,7 @@ export default function ProductsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>
