@@ -136,7 +136,7 @@ export default async function HomePage() {
           </div>
 
           {/* Clickable Category Cards — Image is the aesthetic card, name sits cleanly below */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8">
+          <div className={`grid grid-cols-2 gap-4 sm:gap-8 ${categories.length === 4 ? "lg:grid-cols-4" : "sm:grid-cols-3"}`}>
             {categories.map((cat, idx) => {
               const catSubcategories = (subcategories || []).filter(
                 (s) => s.categoryId === cat.id || s.category_id === cat.id
