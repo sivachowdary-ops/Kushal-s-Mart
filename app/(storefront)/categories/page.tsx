@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Tag } from "lucide-react";
 import { getStorefrontData } from "@/lib/storefront-data";
+import { getCategoryImage } from "@/lib/category-logos";
 
 // Server Component — fetches real categories from Supabase at request time
 export default async function CategoriesPage() {
@@ -53,6 +54,7 @@ export default async function CategoriesPage() {
               const catSubcategories = (subcategories || []).filter(
                 (s) => s.categoryId === cat.id || s.category_id === cat.id
               );
+              const catImage = getCategoryImage(cat);
 
               return (
                 <div key={cat.slug} className="group flex flex-col items-center">
@@ -62,9 +64,9 @@ export default async function CategoriesPage() {
                     prefetch={true}
                     className="w-full aspect-square max-w-[280px] rounded-3xl bg-white border border-gray-200/90 p-6 shadow-sm flex items-center justify-center transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:border-red-300 group-hover:ring-4 group-hover:ring-red-500/5 cursor-pointer"
                   >
-                    {cat.imageUrl ? (
+                    {catImage ? (
                       <img
-                        src={cat.imageUrl}
+                        src={catImage}
                         alt={cat.name}
                         className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-110"
                         loading="lazy"
