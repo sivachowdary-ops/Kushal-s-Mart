@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { Bus, Pause, Play, Truck } from "lucide-react";
+import { useDiwaliOffer } from "@/lib/use-diwali-offer";
 
 type Theme = "light" | "dark"; // text colour on the coloured box
 
@@ -82,9 +83,28 @@ const SLIDES: ProductSlide[] = [
   },
 ];
 
+// First slide while the offer runs (dates in lib/offers.ts). Razorpay applies the discount,
+// so the copy has to say that the price drops at payment, not on the site.
+const DIWALI_SLIDE: ProductSlide = {
+  id: "diwali",
+  tab: { label: "Diwali", hint: "10% off when you pay" },
+  // The dots are a string of lights along the top edge
+  field: "bg-[#4A0D4F] bg-[radial-gradient(circle,#FFC21A_3px,transparent_4px)] bg-[length:26px_16px] bg-[position:0_8px] bg-repeat-x",
+  theme: "light",
+  kicker: "Diwali offer, applied when you pay",
+  title: ["Every product", "10% off."],
+  titleAccent: "text-[#FFC21A]",
+  body: "RC cars, diecast and more. Your 10% comes off on the Razorpay payment page when you pay online.",
+  cta: { label: "Shop the offer", href: "/shop", className: "bg-[#FFC21A] text-[#111625] hover:bg-yellow-300" },
+  secondary: { label: "Shop RC cars", href: "/category/rc-cars" },
+  images: [
+    { src: "/products/polo-drift-red-1.webp", alt: "1/24 Polo RC drift car", className: "w-[50%] translate-y-[8%]" },
+    { src: "/products/thar-rox-yellow-1.webp", alt: "Thar Rox 1:18 RC car", className: "w-[44%] -translate-y-[8%]" },
+  ],
+  sticker: { big: "10% off", small: "when you pay", className: "bg-[#FFC21A] text-[#111625] -rotate-3" },
+};
+
 const DELIVERY_TAB = { label: "Delivery", hint: "24–48 hrs in AP & TS" };
-const TABS = [...SLIDES.map((s) => s.tab), DELIVERY_TAB];
-const SLIDE_COUNT = TABS.length;
 
 const TEXT = {
   light: { kicker: "text-white/75", body: "text-white/80", heading: "text-white", ghost: "border-white/45 text-white hover:bg-white/10" },
@@ -240,8 +260,17 @@ function DeliveryPoster() {
   );
 }
 
-/** Homepage hero carousel: three product posters plus the APSRTC delivery poster, with a labelled tab strip. */
-export function HeroSlider() {
+/** Homepage hero carousel. `offerActive` is the server's answer, so the first paint already has the right slides. */
+export function HeroSlider({ offerActive = false }: { offerActive?: boolean }) {
+  const diwali = useDiwaliOffer(offerActive);
+  // The key restarts the carousel from its first slide when the offer starts or ends
+  return <Carousel key={diwali ? "diwali" : "regular"} slides={diwali ? [DIWALI_SLIDE, ...SLIDES] : SLIDES} />;
+}
+
+/** The product posters plus the APSRTC delivery poster, with a labelled tab strip. */
+function Carousel({ slides }: { slides: ProductSlide[] }) {
+  const tabs = [...slides.map((s) => s.tab), DELIVERY_TAB];
+  const slideCount = tabs.length;
   // The previous slide stays shown under the new one while it fades in, so the page never shows through
   const [{ current: currentIndex, previous: previousIndex }, setSlide] = useState({ current: 0, previous: -1 });
   const [userPaused, setUserPaused] = useState(false);
@@ -251,11 +280,11 @@ export function HeroSlider() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const goTo = useCallback(
-    (idx: number) => setSlide((s) => ({ current: (idx + SLIDE_COUNT) % SLIDE_COUNT, previous: s.current })),
-    []
+    (idx: number) => setSlide((s) => ({ current: (idx + slideCount) % slideCount, previous: s.current })),
+    [slideCount]
   );
-  const nextSlide = useCallback(() => setSlide((s) => ({ current: (s.current + 1) % SLIDE_COUNT, previous: s.current })), []);
-  const prevSlide = useCallback(() => setSlide((s) => ({ current: (s.current - 1 + SLIDE_COUNT) % SLIDE_COUNT, previous: s.current })), []);
+  const nextSlide = useCallback(() => setSlide((s) => ({ current: (s.current + 1) % slideCount, previous: s.current })), [slideCount]);
+  const prevSlide = useCallback(() => setSlide((s) => ({ current: (s.current - 1 + slideCount) % slideCount, previous: s.current })), [slideCount]);
 
   useEffect(() => {
     const onVisibility = () => setPageHidden(document.hidden);
@@ -298,7 +327,7 @@ export function HeroSlider() {
     >
       {/* All slides share one grid cell, so the banner keeps the height of the tallest one and never jumps */}
       <div className="grid touch-pan-y overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {Array.from({ length: SLIDE_COUNT }, (_, idx) => {
+        {tabs.map((tab, idx) => {
           const active = idx === currentIndex;
           return (
             <div
@@ -306,11 +335,11 @@ export function HeroSlider() {
               id={`hero-slide-${idx}`}
               role="group"
               aria-roledescription="slide"
-              aria-label={`${idx + 1} of ${SLIDE_COUNT}: ${TABS[idx].label}`}
+              aria-label={`${idx + 1} of ${slideCount}: ${tab.label}`}
               inert={!active}
               className={`[grid-area:1/1] transition-opacity duration-500 motion-reduce:transition-none ${active ? "z-10 opacity-100" : idx === previousIndex ? "opacity-100" : "invisible opacity-0"}`}
             >
-              {idx < SLIDES.length ? <ProductPoster slide={SLIDES[idx]} priority={idx === 0} /> : <DeliveryPoster />}
+              {idx < slides.length ? <ProductPoster slide={slides[idx]} priority={idx === 0} /> : <DeliveryPoster />}
             </div>
           );
         })}
@@ -319,8 +348,8 @@ export function HeroSlider() {
       {/* Tab strip: names every slide, shows which one is on and how long until the next */}
       <div className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-stretch px-2 sm:px-4 lg:px-6">
-          <div className="grid flex-1 grid-cols-4">
-            {TABS.map((tab, idx) => {
+          <div className={`grid flex-1 ${slideCount > 4 ? "grid-cols-5" : "grid-cols-4"}`}>
+            {tabs.map((tab, idx) => {
               const active = idx === currentIndex;
               return (
                 <button
@@ -329,7 +358,7 @@ export function HeroSlider() {
                   onClick={() => goTo(idx)}
                   aria-controls={`hero-slide-${idx}`}
                   aria-current={active}
-                  className="group flex min-h-[52px] flex-col justify-center gap-1.5 px-2 pt-3 pb-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#111625] sm:px-3"
+                  className={`group flex min-h-[52px] flex-col justify-center gap-1.5 pt-3 pb-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#111625] sm:px-3 ${slideCount > 4 ? "px-1" : "px-2"}`}
                 >
                   <span className="relative block h-[3px] w-full overflow-hidden rounded-full bg-gray-200">
                     {active && (
@@ -341,7 +370,7 @@ export function HeroSlider() {
                       />
                     )}
                   </span>
-                  <span className={`text-[13px] font-bold sm:text-sm ${active ? "text-[#111625]" : "text-gray-500 group-hover:text-[#111625]"}`}>{tab.label}</span>
+                  <span className={`whitespace-nowrap font-bold sm:text-sm ${slideCount > 4 ? "text-xs" : "text-[13px]"} ${active ? "text-[#111625]" : "text-gray-500 group-hover:text-[#111625]"}`}>{tab.label}</span>
                   <span className="hidden text-xs font-medium text-gray-500 lg:block">{tab.hint}</span>
                 </button>
               );

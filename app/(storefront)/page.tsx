@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Phone, Mail, MapPin, Truck, ShieldCheck, Headset, Store, Search, Clock, CheckCircle2, Car, Trophy, Sparkles } from "lucide-react";
 import { HeroSlider } from "@/components/storefront/hero-slider";
+import { isDiwaliOfferActive } from "@/lib/offers";
 import { ProductCard } from "@/components/storefront/product-card";
 import { getStorefrontData } from "@/lib/storefront-data";
 import { getCategoryImage } from "@/lib/category-logos";
@@ -112,7 +113,7 @@ export default async function HomePage() {
     <div className="pb-16 bg-[#F4F5F7]">
 
       {/* ── 1. Hero Banner Slider ── */}
-      <HeroSlider />
+      <HeroSlider offerActive={isDiwaliOfferActive()} />
 
       {/* ── 2. Categories Section (Directly Below Hero per §1) ── */}
       <section className="py-12 border-b border-gray-200/60 bg-white">

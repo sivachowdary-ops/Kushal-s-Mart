@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, X } from "lucide-react";
+import { useDiwaliOffer } from "@/lib/use-diwali-offer";
 
 // Once per visit: sessionStorage clears when the visitor closes the site, so it shows again next time
 const STORAGE_KEY = "km_apsrtc_popup_seen";
 
 /** Once-per-visit announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Telangana. */
 export function DeliveryPopup() {
+  const offerActive = useDiwaliOffer();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -35,7 +37,8 @@ export function DeliveryPopup() {
     } catch {}
   }
 
-  if (!open) return null;
+  // The Diwali pop-up takes this one's place while the offer runs, so visitors never get two at once
+  if (!open || offerActive) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
