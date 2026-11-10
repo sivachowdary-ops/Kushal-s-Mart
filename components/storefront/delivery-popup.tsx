@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, Phone, X } from "lucide-react";
 import { useDiwaliOffer } from "@/lib/use-diwali-offer";
 
 // Once per visit: sessionStorage clears when the visitor closes the site, so it shows again next time
 const STORAGE_KEY = "km_apsrtc_popup_seen";
 
-/** Once-per-visit announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Telangana. */
+/** Once-per-visit announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Hyderabad. */
 export function DeliveryPopup() {
   const offerActive = useDiwaliOffer();
   const [open, setOpen] = useState(false);
@@ -66,18 +66,27 @@ export function DeliveryPopup() {
             <span className="pb-1 text-2xl font-extrabold">hours</span>
           </div>
           <h2 id="apsrtc-popup-title" className="mt-3 font-display text-2xl font-bold leading-tight">
-            Delivery across Andhra Pradesh &amp; Telangana by APSRTC
+            Delivery in Andhra Pradesh &amp; Hyderabad by APSRTC
           </h2>
         </div>
         <div className="space-y-3 px-7 pt-6 pb-7">
-          <div className="flex items-center justify-between rounded-2xl border-2 border-red-200 bg-red-50 px-4 py-3">
-            <span className="text-sm font-bold text-gray-900">Andhra Pradesh &amp; Telangana</span>
-            <span className="text-sm font-extrabold text-red-700">24–48 hours</span>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border-2 border-red-200 bg-red-50 px-4 py-3">
+            <span className="text-sm font-bold text-gray-900">Andhra Pradesh &amp; Hyderabad</span>
+            <span className="whitespace-nowrap text-sm font-extrabold text-red-700">24–48 hours</span>
           </div>
           <div className="flex items-center justify-between rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-3">
             <span className="text-sm font-bold text-gray-900">Rest of India</span>
-            <span className="text-sm font-extrabold text-gray-600">3–5 business days</span>
+            <span className="text-sm font-extrabold text-gray-600">4–7 days</span>
           </div>
+          <a
+            href="tel:+917288907757"
+            className="flex min-h-[48px] items-center justify-between rounded-2xl border-2 border-[#FFC21A] bg-[#FFF8E1] px-4 py-3 hover:bg-[#FFF1C2] transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold text-gray-900">
+              <Phone className="h-4 w-4 text-[#111625]" /> For RTC booking
+            </span>
+            <span className="text-sm font-extrabold text-[#111625]">72889 07757</span>
+          </a>
           <Link
             href="/shop"
             onClick={close}

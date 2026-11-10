@@ -18,11 +18,12 @@ export default function ShippingPolicyPage() {
           <p>All orders placed before 2:00 PM IST are processed and dispatched on the same business day. Orders placed after 2:00 PM IST or on Sundays/Public Holidays will be dispatched on the next business day.</p>
 
           <h2 className="font-extrabold text-lg text-gray-900 border-b border-gray-100 pb-2">3. Delivery Timeline</h2>
-          <p>Estimated delivery timelines across India:</p>
+          <p>Estimated delivery timelines:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Metro Cities & Major Hubs: 2 – 4 Business Days</li>
-            <li>Rest of India & Tier-2/3 Cities: 3 – 6 Business Days</li>
+            <li>Andhra Pradesh &amp; Hyderabad: 24 – 48 Hours by APSRTC</li>
+            <li>Rest of India: 4 – 7 Days</li>
           </ul>
+          <p>For RTC booking, call <a href="tel:+917288907757" className="text-red-600 font-bold hover:underline">72889 07757</a>.</p>
 
           <h2 className="font-extrabold text-lg text-gray-900 border-b border-gray-100 pb-2">4. Order Tracking</h2>
           <p>Once dispatched, you will receive an AWB tracking number via SMS/Email. You can track your shipment anytime on our <a href="/track-order" className="text-red-600 font-bold hover:underline">Track Order</a> page.</p>

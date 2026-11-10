@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
-import { Bus, Pause, Play, Truck } from "lucide-react";
+import { Bus, Pause, Phone, Play, Truck } from "lucide-react";
 import { useDiwaliOffer } from "@/lib/use-diwali-offer";
 
 type Theme = "light" | "dark"; // text colour on the coloured box
@@ -104,7 +104,7 @@ const DIWALI_SLIDE: ProductSlide = {
   sticker: { big: "10% off", small: "when you pay", className: "bg-[#FFC21A] text-[#111625] -rotate-3" },
 };
 
-const DELIVERY_TAB = { label: "Delivery", hint: "24–48 hrs in AP & TS" };
+const DELIVERY_TAB = { label: "Delivery", hint: "24–48 hrs in AP & Hyd" };
 
 const TEXT = {
   light: { kicker: "text-white/75", body: "text-white/80", heading: "text-white", ghost: "border-white/45 text-white hover:bg-white/10" },
@@ -220,9 +220,12 @@ function DeliveryPoster() {
               <span className="pb-1 text-3xl font-extrabold sm:text-5xl lg:text-4xl xl:text-5xl">hours</span>
             </span>
             <span className="font-display mt-3 block text-xl font-bold leading-tight sm:text-3xl xl:text-4xl">
-              to your door across Andhra Pradesh &amp; Telangana.
+              to your door in Andhra Pradesh &amp; Hyderabad.
             </span>
           </h2>
+          <a href="tel:+917288907757" className="inline-flex items-center gap-2 text-sm font-bold text-white/85 hover:text-white sm:text-base">
+            <Phone className="h-4 w-4 text-[#FFC21A]" /> For RTC booking: <span className="text-[#FFC21A]">72889 07757</span>
+          </a>
         </>
       }
       actions={
@@ -240,7 +243,7 @@ function DeliveryPoster() {
           <div className="flex items-center gap-3 rounded-2xl border-[3px] border-[#D3150F] bg-white p-3 sm:gap-4 sm:p-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#D3150F] text-white sm:h-14 sm:w-14 sm:rounded-2xl"><Bus className="h-6 w-6 sm:h-7 sm:w-7" /></div>
             <div>
-              <p className="text-xs font-bold text-red-700 sm:text-sm">Andhra Pradesh &amp; Telangana</p>
+              <p className="text-xs font-bold text-red-700 sm:text-sm">Andhra Pradesh &amp; Hyderabad</p>
               <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">24–48 hours</p>
               <p className="hidden text-sm font-semibold text-gray-600 sm:block">Delivered by APSRTC</p>
             </div>
@@ -249,7 +252,7 @@ function DeliveryPoster() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#111625] text-[#FFC21A] sm:h-14 sm:w-14 sm:rounded-2xl"><Truck className="h-6 w-6 sm:h-7 sm:w-7" /></div>
             <div>
               <p className="text-xs font-bold text-gray-600 sm:text-sm">Rest of India</p>
-              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">3–5 business days</p>
+              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">4–7 days</p>
               <p className="hidden text-sm font-semibold text-gray-600 sm:block">Delivered by Delhivery</p>
             </div>
           </div>

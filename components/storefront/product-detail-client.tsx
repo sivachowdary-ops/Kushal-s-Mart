@@ -170,11 +170,11 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   };
 
   const checkPincode = () => {
-    if (/^5[0-3]\d{4}$/.test(pincode)) {
-      // Telangana (50xxxx) and Andhra Pradesh (51xxxx–53xxxx)
-      setDeliveryResult({ ok: true, text: "Delivery in 24–48 hours by APSRTC (Andhra Pradesh & Telangana)." });
+    if (/^(500|51[5-9]|52\d|53[0-5])\d{3}$/.test(pincode)) {
+      // Hyderabad (500xxx) and Andhra Pradesh (515xxx–535xxx)
+      setDeliveryResult({ ok: true, text: "Delivery in 24–48 hours by APSRTC (Andhra Pradesh & Hyderabad). For RTC booking, call 72889 07757." });
     } else if (/^[1-9]\d{5}$/.test(pincode)) {
-      setDeliveryResult({ ok: true, text: "Estimated Delivery in 3-5 Business Days across India." });
+      setDeliveryResult({ ok: true, text: "Estimated delivery in 4–7 days across India." });
     } else {
       setDeliveryResult({ ok: false, text: "Please enter a valid 6-digit Indian PIN code." });
     }

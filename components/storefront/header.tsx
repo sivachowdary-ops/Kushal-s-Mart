@@ -37,8 +37,8 @@ export function Header() {
             {/* One line on phones */}
             <span>
               <span className="text-[#FFC21A] font-bold">24–48 hr delivery</span>
-              <span className="sm:hidden"> in AP &amp; Telangana by APSRTC</span>
-              <span className="hidden sm:inline"> across Andhra Pradesh &amp; Telangana by APSRTC</span>
+              <span className="sm:hidden"> in AP &amp; Hyderabad by APSRTC</span>
+              <span className="hidden sm:inline"> in Andhra Pradesh &amp; Hyderabad by APSRTC</span>
             </span>
           </span>
           <span className="hidden md:inline text-gray-500">·</span>
