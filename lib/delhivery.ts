@@ -25,6 +25,7 @@ export interface DelhiveryShipmentRequest {
   };
   items: {
     productName: string;
+    variantName?: string | null; // colour/model, printed on the label
     quantity: number;
     unitPrice: number; // paise
     weightGrams?: number;
@@ -106,6 +107,52 @@ async function logShipmentAttempt(params: {
 
 // ── 1. Create Delhivery Shipment ───────────────────────────────────────────────
 
+// Longest products_desc sent to Delhivery so far; kept so bookings aren't rejected
+const LABEL_DESC_LIMIT = 200;
+
+/**
+ * "CCA Official Licensed BMW R 1250 RT – 1/12 Scale Model Bike" → "CCA BMW R 1250 RT",
+ * then cut at a word boundary to at most `max` characters.
+ */
+function shortProductName(name: string, max: number): string {
+  let short = name
+    .split(/\s+[–—|-]\s+/)[0]
+    .replace(/\b(officially|official|licensed)\b/gi, "");
+  // When space is tight the model name matters more than the scale ("1/12 Scale", "1:18")
+  if (max < 40) short = short.replace(/\b1\s*[:/]\s*\d+(\s*scale)?/gi, "");
+  short = short.replace(/\s+/g, " ").trim();
+  if (short.length <= max) return short;
+  const cut = short.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+/**
+ * The product line printed on the shipping label: every item with its colour and quantity,
+ * e.g. "Honda CD 50 Diecast Bike (Black) x1; Thar Rox (Yellow) x2". Names get shorter until all
+ * items fit; only if even short names don't fit does the end say "+N more", so the packer knows.
+ */
+export function buildLabelDescription(items: DelhiveryShipmentRequest["items"]): string {
+  const describe = (max: number) =>
+    items.map((i) => {
+      const variant = (i.variantName || "").trim();
+      const showVariant = variant && !["Standard", "Default"].includes(variant);
+      return `${shortProductName(i.productName, max)}${showVariant ? ` (${variant.slice(0, 20)})` : ""} x${i.quantity}`;
+    });
+
+  for (const max of [40, 32, 26, 20, 16]) {
+    const desc = describe(max).join("; ");
+    if (desc.length <= LABEL_DESC_LIMIT) return desc;
+  }
+
+  const parts = describe(16);
+  for (let count = parts.length - 1; count >= 1; count--) {
+    const desc = `${parts.slice(0, count).join("; ")}; +${parts.length - count} more`;
+    if (desc.length <= LABEL_DESC_LIMIT) return desc;
+  }
+  return parts[0]?.slice(0, LABEL_DESC_LIMIT) || "RC Toys & Models";
+}
+
 /**
  * Automatically creates a shipment in Delhivery B2C system.
  * Returns waybill / AWB on success, or structured failure details.
@@ -128,10 +175,7 @@ export async function createDelhiveryShipment(
     500;
   const weightKg = parseFloat((computedWeightGrams / 1000).toFixed(2));
 
-  const productDescription = data.items
-    .map((i) => `${i.productName} (x${i.quantity})`)
-    .join(", ")
-    .slice(0, 200) || "RC Toys & Models";
+  const productDescription = buildLabelDescription(data.items);
 
   const totalQty = data.items.reduce((sum, i) => sum + i.quantity, 0) || 1;
 

@@ -205,7 +205,7 @@ interface AdminStoreContextType {
   ordersToday: number;
   lowStockCount: number;
   getProductFinancialStats: (
-    timeframe?: "today" | "week" | "month" | "year" | "all"
+    timeframe?: "today" | "week" | "month" | "year" | "all" | { start: Date; end: Date }
   ) => ProductFinancialStats[];
 }
 
@@ -677,7 +677,8 @@ export function AdminStoreProvider({
 
   const getProductFinancialStats = useCallback(
     (
-      timeframe: "today" | "week" | "month" | "year" | "all" = "all"
+      // A preset, or an exact range: start inclusive, end exclusive
+      timeframe: "today" | "week" | "month" | "year" | "all" | { start: Date; end: Date } = "all"
     ): ProductFinancialStats[] => {
       const now = new Date();
       const currentYear = now.getFullYear();
@@ -693,6 +694,9 @@ export function AdminStoreProvider({
 
       const filteredOrders = paidOrders.filter((order) => {
         const orderDate = new Date(order.created_at);
+        if (typeof timeframe === "object") {
+          return orderDate >= timeframe.start && orderDate < timeframe.end;
+        }
         if (timeframe === "today") {
           return localDateKey(orderDate) === currentDateStr;
         }

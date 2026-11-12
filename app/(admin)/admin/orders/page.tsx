@@ -7,6 +7,27 @@ import { channelLabel, isPaymentPending, needsDispatch, orderStatusClass, orderS
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer } from "lucide-react";
+import { DateRangeFilter } from "@/components/admin/date-range-filter";
+import { ALL_DATES, describeDateRange, isInDateRange, resolveDateRange, type DateFilter } from "@/lib/date-range";
+
+// The everyday statuses get one-tap buttons; the rare ones sit in the "More" menu
+const STATUS_BUTTONS = [
+  { value: "ALL", label: "All" },
+  { value: "NEEDS_SHIPMENT", label: "📦 To dispatch" },
+  { value: "PAYMENT_PENDING", label: "Payment pending" },
+  { value: "PAID", label: "Paid" },
+  { value: "PACKED", label: "Packed" },
+  { value: "SHIPPED", label: "Shipped" },
+  { value: "DELIVERED", label: "Delivered" },
+  { value: "CANCELLED", label: "Cancelled" },
+];
+const MORE_STATUSES = [
+  { value: "PENDING", label: "Pending" },
+  { value: "PROCESSING", label: "Processing" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "PENDING_PAYMENT", label: "⏳ Unpaid checkouts (not orders yet)" },
+  { value: "PAYMENT_FAILED", label: "✕ Failed payment attempts" },
+];
 
 // useSearchParams needs a Suspense boundary
 export default function OrdersPage() {
@@ -25,12 +46,16 @@ function OrdersList() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "ALL");
   const [channelFilter, setChannelFilter] = useState("ALL");
+  const [dateFilter, setDateFilter] = useState<DateFilter>(ALL_DATES);
+  const dateRange = resolveDateRange(dateFilter);
 
   useEffect(() => {
     refreshOrders();
   }, [refreshOrders]);
 
   const filteredOrders = orders.filter((o) => {
+    if (!isInDateRange(o.created_at, dateRange)) return false;
+
     const q = search.toLowerCase().trim();
     const qDigits = q.replace(/\D/g, "");
     const matchesSearch =
@@ -54,6 +79,8 @@ function OrdersList() {
     const matchesChannel = channelFilter === "ALL" || o.channel === channelFilter;
     return matchesSearch && matchesStatus && matchesChannel;
   });
+  const filtersActive = search || statusFilter !== "ALL" || channelFilter !== "ALL" || dateFilter.preset !== "all";
+  const isMoreStatus = MORE_STATUSES.some((s) => s.value === statusFilter);
 
   if (isLoading && orders.length === 0) {
     return (
@@ -88,49 +115,78 @@ function OrdersList() {
               className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-4">
-            <select
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="ALL">All Channels</option>
-              <option value="ONLINE">Online Store</option>
-              <option value="OFFLINE">Counter (POS)</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="NEEDS_SHIPMENT">📦 Needs Shipment (Paid, No AWB)</option>
-              <option value="PAYMENT_PENDING">Payment pending (COD or unpaid)</option>
-              <option value="PAID">Paid</option>
-              <option value="PACKED">Packed (AWB Generated)</option>
-              <option value="PENDING">Pending</option>
-              <option value="PENDING_PAYMENT">⏳ Unpaid checkouts (not orders yet)</option>
-              <option value="PAYMENT_FAILED">✕ Failed payment attempts</option>
-              <option value="PROCESSING">Processing</option>
-              <option value="SHIPPED">Shipped</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
+          <select
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="ALL">All Channels</option>
+            <option value="ONLINE">Online Store</option>
+            <option value="OFFLINE">Counter (POS)</option>
+          </select>
+        </div>
+
+        {/* Status buttons and date range */}
+        <div className="space-y-4 border-b border-slate-200 p-4 sm:px-6">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Status</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mb-1">
+              {STATUS_BUTTONS.map((s) => {
+                const active = statusFilter === s.value;
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setStatusFilter(s.value)}
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors cursor-pointer ${
+                      active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+              <select
+                value={isMoreStatus ? statusFilter : ""}
+                onChange={(e) => setStatusFilter(e.target.value || "ALL")}
+                aria-label="More statuses"
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                  isMoreStatus ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"
+                }`}
+              >
+                <option value="" className="bg-white text-slate-900">More…</option>
+                {MORE_STATUSES.map((s) => (
+                  <option key={s.value} value={s.value} className="bg-white text-slate-900">{s.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Date</p>
+            <DateRangeFilter
+              value={dateFilter}
+              onChange={setDateFilter}
+              presets={["all", "today", "yesterday", "week", "month", "custom"]}
+            />
+          </div>
+          <p className="text-sm text-slate-500">
+            <span className="font-bold text-slate-900">{filteredOrders.length}</span> {filteredOrders.length === 1 ? "order" : "orders"}
+            {dateRange && <> · {describeDateRange(dateRange)}</>}
+          </p>
         </div>
 
         {filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
             <ShoppingBag className="mb-4 h-12 w-12 text-slate-300" />
             <p className="text-lg font-medium text-slate-900">No orders found</p>
-            <p className="mt-1">No orders yet</p>
-            {(search || statusFilter !== "ALL" || channelFilter !== "ALL") && (
+            <p className="mt-1">{filtersActive ? "No orders match these filters" : "No orders yet"}</p>
+            {filtersActive && (
               <button
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("ALL");
                   setChannelFilter("ALL");
+                  setDateFilter(ALL_DATES);
                 }}
                 className="mt-4 text-blue-600 hover:underline"
               >

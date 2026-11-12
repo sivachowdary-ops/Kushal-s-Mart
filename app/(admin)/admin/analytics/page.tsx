@@ -3,16 +3,16 @@
 import { useAdminStore } from "@/lib/admin-store";
 import { Loader2, TrendingUp, IndianRupee, ShoppingBag, Package } from "lucide-react";
 import { useState, useEffect } from "react";
+import { DateRangeFilter } from "@/components/admin/date-range-filter";
+import { describeDateRange, resolveDateRange, type DateFilter } from "@/lib/date-range";
 
 const formatPrice = (paise: number) => {
   return (paise / 100).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-type Timeframe = 'today' | 'week' | 'month' | 'year' | 'all';
-
 export default function AnalyticsPage() {
-  const { isLoading, getProductFinancialStats, totalRevenue, totalCostOfGoods, totalNetProfit, onlineSalesTotal, counterSalesTotal } = useAdminStore();
-  const [timeframe, setTimeframe] = useState<Timeframe>('all');
+  const { isLoading, getProductFinancialStats } = useAdminStore();
+  const [dateFilter, setDateFilter] = useState<DateFilter>({ preset: 'all', from: '', to: '' });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -27,7 +27,8 @@ export default function AnalyticsPage() {
     );
   }
 
-  const stats = getProductFinancialStats(timeframe);
+  const dateRange = resolveDateRange(dateFilter);
+  const stats = getProductFinancialStats(dateRange ?? 'all');
   const totalSales = stats.reduce((sum, s) => sum + s.revenue, 0);
   const totalCogs = stats.reduce((sum, s) => sum + s.cost, 0);
   const totalProfit = stats.reduce((sum, s) => sum + s.profit, 0);
@@ -35,8 +36,7 @@ export default function AnalyticsPage() {
   
   const profitMargin = totalSales > 0 ? ((totalProfit / totalSales) * 100).toFixed(1) : "0.0";
 
-  // When 'all' is selected, we can use global online vs counter, otherwise we'd need to filter them. 
-  // Let's approximate channel split for the time frame based on stats if possible, or just use the global if "all"
+  // Channel split for the chosen period
   const onlineUnits = stats.reduce((sum, s) => sum + s.onlineUnits, 0);
   const counterUnits = stats.reduce((sum, s) => sum + s.counterUnits, 0);
   
@@ -63,23 +63,16 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Analytics Overview</h1>
-        <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-sm overflow-x-auto max-w-full">
-          {(['today', 'week', 'month', 'year', 'all'] as Timeframe[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTimeframe(t)}
-              className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-lg capitalize transition-colors whitespace-nowrap ${
-                timeframe === t 
-                  ? 'bg-gray-900 text-white' 
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {t === 'all' ? 'All Time' : t}
-            </button>
-          ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-2xl font-bold text-gray-900">Analytics Overview</h1>
+          <p className="text-sm font-semibold text-gray-500">{describeDateRange(dateRange)}</p>
         </div>
+        <DateRangeFilter
+          value={dateFilter}
+          onChange={setDateFilter}
+          presets={['today', 'yesterday', 'week', 'month', 'year', 'all', 'custom']}
+        />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

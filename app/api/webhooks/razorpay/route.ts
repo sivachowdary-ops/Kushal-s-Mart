@@ -181,8 +181,9 @@ export async function POST(request: Request) {
           };
 
           const shipmentItems = (fullOrder.OrderItem || []).map(
-            (oi: { productName: string; quantity: number; unitPrice: number }) => ({
+            (oi: { productName: string; variantName?: string | null; quantity: number; unitPrice: number }) => ({
               productName: oi.productName,
+              variantName: oi.variantName,
               quantity: oi.quantity,
               unitPrice: oi.unitPrice,
               weightGrams: 500, // Default 500g per item (approved by owner)

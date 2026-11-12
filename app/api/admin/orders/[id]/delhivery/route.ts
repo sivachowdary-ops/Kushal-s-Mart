@@ -93,6 +93,7 @@ export async function POST(
       },
       items: (order.order_items || []).map((i) => ({
         productName: i.product_name,
+        variantName: i.variant_name,
         quantity: i.quantity,
         unitPrice: i.unit_price,
       })),

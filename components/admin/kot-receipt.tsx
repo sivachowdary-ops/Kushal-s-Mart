@@ -103,16 +103,24 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
 
       {/* Items List */}
       <div className="border-b border-dashed border-gray-400 pb-2 mb-2 space-y-1">
-        {order.items.map((item, idx) => (
-          <div key={idx}>
-            <div className="font-bold truncate">{item.productName}</div>
-            <div className="flex justify-between text-gray-700">
-              <span className="flex-1 text-[8px] sm:text-[9px] truncate">{item.variantName}</span>
-              <span className="w-6 text-center font-bold">x{item.quantity}</span>
-              <span className="w-12 text-right font-bold">{formatPrice(item.lineTotal)}</span>
+        {/* Names and colours wrap instead of being cut off, so every item reads in full on thermal paper */}
+        {order.items.map((item, idx) => {
+          const variant = ["Standard", "Default"].includes(item.variantName) ? "" : item.variantName;
+          return (
+            <div key={idx}>
+              <div className="font-bold break-words">{item.productName}</div>
+              <div className="flex items-start justify-between gap-1">
+                <span className="flex-1 font-bold break-words">{variant}</span>
+                <span className="w-6 shrink-0 text-center font-bold">x{item.quantity}</span>
+                <span className="w-12 shrink-0 text-right font-bold">{formatPrice(item.lineTotal)}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+        <div className="flex justify-between pt-1 font-bold">
+          <span>Items: {order.items.length}</span>
+          <span>Qty: {order.items.reduce((sum, i) => sum + i.quantity, 0)}</span>
+        </div>
       </div>
 
       {/* Totals */}
