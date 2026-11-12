@@ -91,8 +91,8 @@ export async function GET(request: Request) {
     } else if (rawStatus === "OUT_FOR_DELIVERY") {
       normalizedStatus = "OUT_FOR_DELIVERY";
       stageLevel = 4;
-    } else if (rawStatus === "SHIPPED") {
-      normalizedStatus = "SHIPPED";
+    } else if (rawStatus === "SHIPPED" || rawStatus === "PICKED_UP" || rawStatus === "IN_TRANSIT") {
+      normalizedStatus = rawStatus;
       stageLevel = 4;
     } else if (rawStatus === "PACKED") {
       normalizedStatus = "PACKED";
@@ -115,7 +115,11 @@ export async function GET(request: Request) {
       timeline.push({ status: "PACKED", timestamp: updatedAt, note: `Packed & ready for dispatch with ${o.courierName || "Delhivery Express"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}` });
     }
     if (stageLevel >= 4) {
-      timeline.push({ status: rawStatus === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY" : "SHIPPED", timestamp: updatedAt, note: `Package dispatched and moving in transit` });
+      timeline.push(
+        rawStatus === "PICKED_UP"
+          ? { status: "PICKED_UP", timestamp: updatedAt, note: "Picked up by the courier" }
+          : { status: rawStatus === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY" : "IN_TRANSIT", timestamp: updatedAt, note: `Package dispatched and moving in transit` }
+      );
     }
     if (stageLevel >= 5) {
       timeline.push({ status: "DELIVERED", timestamp: updatedAt, note: "Package handed over to recipient" });

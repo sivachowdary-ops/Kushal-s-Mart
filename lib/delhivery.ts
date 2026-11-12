@@ -49,7 +49,7 @@ export interface DelhiveryShipmentResponse {
 }
 
 export interface DelhiveryTrackingStage {
-  stage: "ORDER_PLACED" | "PACKED" | "SHIPPED" | "OUT_FOR_DELIVERY" | "DELIVERED";
+  stage: "ORDER_PLACED" | "PACKED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED";
   statusText: string;
   location?: string;
   timestamp?: string;
@@ -358,10 +358,54 @@ export async function createDelhiveryShipment(
 // ── 2. Get Live Delhivery Tracking Status ──────────────────────────────────────
 
 /**
- * Fetches real-time tracking status from Delhivery and maps it
- * to Kushal's Mart 5-stage tracking lifecycle:
- * ORDER_PLACED -> PACKED -> SHIPPED -> OUT_FOR_DELIVERY -> DELIVERED
+ * Maps a Delhivery status to our courier stage:
+ * PACKED (booked, awaiting pickup) -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED
  */
+export function delhiveryStatusToStage(
+  status: string,
+  statusType = "",
+  instructions = ""
+): DelhiveryTrackingStage["stage"] {
+  const statusLower = status.toLowerCase();
+  const type = statusType.toUpperCase();
+  // Delhivery often reports "In Transit" right after pickup, with "picked up" only in the instructions
+  const detailLower = `${statusLower} ${instructions.toLowerCase()}`;
+
+  // "Undelivered", "Not Delivered" and RTO ("returned to origin … delivered") all contain
+  // "delivered" — they must not mark the order as delivered to the customer. Still moving, so in transit.
+  const isFailedOrReturn =
+    statusLower.includes("undelivered") ||
+    statusLower.includes("not delivered") ||
+    statusLower.includes("rto") ||
+    statusLower.includes("return") ||
+    type === "RT";
+
+  // Shipment booked but the courier hasn't collected it from the shop yet. Delhivery reports these
+  // with StatusType "UD" too, so check before the in-transit rule — "Not Picked" was shown as SHIPPED.
+  const isAwaitingPickup =
+    statusLower.includes("not picked") ||
+    statusLower.includes("manifested") ||
+    statusLower.includes("pickup scheduled") ||
+    statusLower.includes("pending pickup");
+
+  if (isFailedOrReturn) return "IN_TRANSIT";
+  if (isAwaitingPickup) return "PACKED";
+  if (statusLower.includes("delivered") || type === "DL") return "DELIVERED";
+  if (statusLower.includes("out for delivery") || statusLower.includes("dispatched")) return "OUT_FOR_DELIVERY";
+  if (detailLower.includes("picked up") || statusLower.includes("picked")) return "PICKED_UP";
+  if (
+    statusLower.includes("transit") ||
+    statusLower.includes("reached") ||
+    statusLower.includes("left") ||
+    statusLower.includes("pending") ||
+    type === "UD"
+  ) {
+    return "IN_TRANSIT";
+  }
+  return "PACKED";
+}
+
+/** Fetches real-time tracking status from Delhivery; see delhiveryStatusToStage for the stages. */
 export async function getDelhiveryTrackingStatus(
   waybill: string
 ): Promise<DelhiveryTrackingResult> {
@@ -426,46 +470,11 @@ export async function getDelhiveryTrackingStatus(
     }
 
     const rawStatus = reportedStatus;
-    const rawType = (pkgData.Status?.StatusType || "").toUpperCase();
-
-    // Map Delhivery status to 5-stage timeline
-    let stage: DelhiveryTrackingStage["stage"] = "PACKED";
-    const statusLower = rawStatus.toLowerCase();
-
-    // "Undelivered", "Not Delivered" and RTO ("returned to origin … delivered") all contain
-    // "delivered" — they must not mark the order as delivered to the customer.
-    const isFailedOrReturn =
-      statusLower.includes("undelivered") ||
-      statusLower.includes("not delivered") ||
-      statusLower.includes("rto") ||
-      statusLower.includes("return") ||
-      rawType === "RT";
-
-    // Shipment booked but the courier hasn't collected it from the shop yet. Delhivery reports these
-    // with StatusType "UD" too, so check before the in-transit rule — "Not Picked" was shown as SHIPPED.
-    const isAwaitingPickup =
-      statusLower.includes("not picked") ||
-      statusLower.includes("manifested") ||
-      statusLower.includes("pickup scheduled");
-
-    if (isFailedOrReturn) {
-      stage = "SHIPPED";
-    } else if (isAwaitingPickup) {
-      stage = "PACKED";
-    } else if (statusLower.includes("delivered") || rawType === "DL") {
-      stage = "DELIVERED";
-    } else if (statusLower.includes("out for delivery") || statusLower.includes("dispatched for delivery")) {
-      stage = "OUT_FOR_DELIVERY";
-    } else if (
-      statusLower.includes("in transit") ||
-      statusLower.includes("reached") ||
-      statusLower.includes("left") ||
-      statusLower.includes("transit") ||
-      statusLower.includes("picked up") ||
-      rawType === "UD"
-    ) {
-      stage = "SHIPPED";
-    }
+    const stage = delhiveryStatusToStage(
+      rawStatus,
+      String(pkgData.Status?.StatusType || ""),
+      String(pkgData.Status?.Instructions || "")
+    );
 
     const rawScans = pkgData.Scans || [];
     const scans = rawScans.map((s: Record<string, unknown>) => {

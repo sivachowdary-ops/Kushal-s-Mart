@@ -17,11 +17,14 @@ const STATUS_BUTTONS = [
   { value: "PAYMENT_PENDING", label: "Payment pending" },
   { value: "PAID", label: "Paid" },
   { value: "PACKED", label: "Packed" },
-  { value: "SHIPPED", label: "Shipped" },
+  { value: "PICKED_UP", label: "Picked up" },
+  { value: "IN_TRANSIT", label: "In transit" },
+  { value: "OUT_FOR_DELIVERY", label: "Out for delivery" },
   { value: "DELIVERED", label: "Delivered" },
   { value: "CANCELLED", label: "Cancelled" },
 ];
 const MORE_STATUSES = [
+  { value: "SHIPPED", label: "Shipped (older orders)" },
   { value: "PENDING", label: "Pending" },
   { value: "PROCESSING", label: "Processing" },
   { value: "COMPLETED", label: "Completed" },
@@ -39,7 +42,7 @@ export default function OrdersPage() {
 }
 
 function OrdersList() {
-  const { orders, isLoading, error, refreshOrders } = useAdminStore();
+  const { orders, isLoading, error, refreshOrders, syncCourierTracking } = useAdminStore();
   const router = useRouter();
   // The dashboard's "Needs action" tiles link here with ?status=...
   const searchParams = useSearchParams();
@@ -50,8 +53,9 @@ function OrdersList() {
   const dateRange = resolveDateRange(dateFilter);
 
   useEffect(() => {
-    refreshOrders();
-  }, [refreshOrders]);
+    // Load orders, then pull the latest Delhivery status (reloads again if anything moved)
+    refreshOrders().then(syncCourierTracking);
+  }, [refreshOrders, syncCourierTracking]);
 
   const filteredOrders = orders.filter((o) => {
     if (!isInDateRange(o.created_at, dateRange)) return false;

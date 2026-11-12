@@ -416,7 +416,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   <option value="PAID">PAID</option>
                   <option value="PROCESSING">PROCESSING</option>
                   <option value="PACKED">PACKED</option>
-                  <option value="SHIPPED">SHIPPED</option>
+                  <option value="PICKED_UP">PICKED UP</option>
+                  <option value="IN_TRANSIT">IN TRANSIT</option>
+                  <option value="OUT_FOR_DELIVERY">OUT FOR DELIVERY</option>
+                  <option value="SHIPPED">SHIPPED (older orders)</option>
                   <option value="DELIVERED">DELIVERED</option>
                   <option value="COMPLETED">COMPLETED</option>
                   <option value="CANCELLED">CANCELLED</option>

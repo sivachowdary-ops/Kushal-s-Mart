@@ -42,6 +42,8 @@ const STATUS_LABELS: Record<string, string> = {
   PROCESSING: "Payment Verified & Processing",
   PAID: "Payment Verified & Processing",
   PACKED: "Packed & Ready to Ship",
+  PICKED_UP: "Picked Up by Courier",
+  IN_TRANSIT: "In Transit",
   SHIPPED: "Dispatched / In Transit",
   OUT_FOR_DELIVERY: "Out for Delivery",
   DELIVERED: "Delivered",
@@ -54,6 +56,8 @@ const STATUS_COLORS: Record<string, string> = {
   PROCESSING: "bg-blue-100 text-blue-800 border-blue-200",
   PAID: "bg-blue-100 text-blue-800 border-blue-200",
   PACKED: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  PICKED_UP: "bg-violet-100 text-violet-800 border-violet-200",
+  IN_TRANSIT: "bg-purple-100 text-purple-800 border-purple-200",
   SHIPPED: "bg-purple-100 text-purple-800 border-purple-200",
   OUT_FOR_DELIVERY: "bg-amber-100 text-amber-800 border-amber-200",
   DELIVERED: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -83,7 +87,8 @@ function OrderCard({ order }: { order: TrackedOrder }) {
   const [expanded, setExpanded] = useState(false);
   const normalizedStep =
     order.status === "PAID" ? "PROCESSING" :
-    order.status === "OUT_FOR_DELIVERY" ? "SHIPPED" :
+    // Picked up, in transit and out for delivery all sit on the progress bar's "shipped" step
+    ["PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"].includes(order.status) ? "SHIPPED" :
     order.status === "PENDING_PAYMENT" ? "PENDING" :
     order.status;
 
@@ -105,7 +110,7 @@ function OrderCard({ order }: { order: TrackedOrder }) {
                 STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800 border-gray-200"
               }`}
             >
-              {order.status === "PAID" ? "PROCESSING" : order.status}
+              {(order.status === "PAID" ? "PROCESSING" : order.status).replaceAll("_", " ")}
             </span>
           </div>
         </div>
@@ -310,13 +315,14 @@ export default function TrackOrderPage() {
               scanStatus = "DELIVERED";
             } else if (instruction.includes("out for delivery") || scanType === "od") {
               scanStatus = "OUT_FOR_DELIVERY";
+            } else if ((instruction.includes("picked up") && !instruction.includes("not picked")) || scanType === "pu") {
+              scanStatus = "PICKED_UP";
             } else if (
               instruction.includes("in transit") ||
               instruction.includes("reached") ||
-              instruction.includes("left") ||
-              scanType === "pu"
+              instruction.includes("left")
             ) {
-              scanStatus = "SHIPPED";
+              scanStatus = "IN_TRANSIT";
             } else if (
               instruction.includes("bad") ||
               instruction.includes("incomplete") ||
@@ -350,9 +356,8 @@ export default function TrackOrderPage() {
           return {
             ...order,
             status: shouldUpdateStatus
-              ? (tracking.currentStage === "DELIVERED" ? "DELIVERED"
-                  : tracking.currentStage === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY"
-                  : tracking.currentStage === "SHIPPED" ? "SHIPPED"
+              ? (["PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"].includes(tracking.currentStage)
+                  ? tracking.currentStage
                   : order.status)
               : order.status,
             timeline: mergedTimeline,

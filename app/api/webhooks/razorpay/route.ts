@@ -87,7 +87,7 @@ export async function POST(request: Request) {
           .eq("id", internalOrderId)
           .maybeSingle();
 
-        if (current?.status && !["PAID", "PACKED", "SHIPPED", "DELIVERED", "COMPLETED"].includes(current.status)) {
+        if (current?.status && !["PAID", "PACKED", "PICKED_UP", "IN_TRANSIT", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "COMPLETED"].includes(current.status)) {
           console.error(
             `[Razorpay Webhook] ⚠️ Payment ${razorpayPaymentId} captured for order ${internalOrderId} ` +
             `in status ${current.status} — needs manual refund or fulfilment`

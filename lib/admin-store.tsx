@@ -191,6 +191,8 @@ interface AdminStoreContextType {
     awb: string
   ) => Promise<boolean>;
   refreshOrders: () => Promise<void>;
+  /** Pulls the latest Delhivery status for active shipments, then reloads orders if any changed */
+  syncCourierTracking: () => Promise<void>;
   /** Orders a customer actually placed — excludes abandoned (PENDING_PAYMENT) and failed checkouts */
   placedOrders: AdminOrder[];
   /** Orders that count as revenue — paid, not cancelled or refunded */
@@ -218,6 +220,9 @@ async function readError(res: Response, fallback: string): Promise<string> {
   const body = await res.json().catch(() => ({}));
   return body.error || body.message || `${fallback} (${res.status})`;
 }
+
+/** When this tab last asked the server to pull Delhivery tracking */
+let lastCourierSyncAt = 0;
 
 /** YYYY-MM-DD in the browser's local time zone (IST for the shop), not UTC. */
 function localDateKey(date: Date): string {
@@ -341,6 +346,21 @@ export function AdminStoreProvider({
       console.error("Failed to fetch orders:", e);
     }
   }, []);
+
+  const syncCourierTracking = useCallback(async () => {
+    // At most every 2 minutes from this tab; the server has the same limit
+    if (Date.now() - lastCourierSyncAt < 2 * 60 * 1000) return;
+    lastCourierSyncAt = Date.now();
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/orders/sync-tracking", { method: "POST", headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.updated > 0) await refreshOrders();
+    } catch (e) {
+      console.error("Failed to sync courier tracking:", e);
+    }
+  }, [refreshOrders]);
 
   useEffect(() => {
     async function loadAll() {
@@ -637,6 +657,9 @@ export function AdminStoreProvider({
         o.payment_status === "PARTIALLY_REFUNDED" ||
         o.status === "COMPLETED" ||
         o.status === "DELIVERED" ||
+        o.status === "OUT_FOR_DELIVERY" ||
+        o.status === "IN_TRANSIT" ||
+        o.status === "PICKED_UP" ||
         o.status === "SHIPPED" ||
         o.status === "PACKED")
   );
@@ -802,6 +825,7 @@ export function AdminStoreProvider({
         updateOrderStatus,
         updateOrderShipping,
         refreshOrders,
+        syncCourierTracking,
         placedOrders,
         revenueOrders: paidOrders,
         totalRevenue,

@@ -60,7 +60,8 @@ export default function AdminDashboardPage() {
     revenueOrders,
     onlineSalesTotal,
     counterSalesTotal,
-    getProductFinancialStats
+    getProductFinancialStats,
+    syncCourierTracking
   } = useAdminStore();
 
   const router = useRouter();
@@ -69,6 +70,11 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Pull the latest Delhivery status so Picked up / In transit / Delivered are current
+  useEffect(() => {
+    syncCourierTracking();
+  }, [syncCourierTracking]);
 
   if (!mounted || isLoading) {
     return (
@@ -124,7 +130,7 @@ export default function AdminDashboardPage() {
   const paymentPending = placedOrders.filter(isPaymentPending).length;
   const actions = [
     { label: "To dispatch", hint: "Paid online orders without a courier yet", count: toDispatch, href: "/admin/orders?status=NEEDS_SHIPMENT", icon: PackageCheck, tone: "text-amber-700 bg-amber-50" },
-    { label: "Packed, not shipped", hint: "Waiting for courier pickup", count: packedWaiting, href: "/admin/orders?status=PACKED", icon: Truck, tone: "text-purple-700 bg-purple-50" },
+    { label: "Packed, awaiting pickup", hint: "Delhivery hasn't collected it yet", count: packedWaiting, href: "/admin/orders?status=PACKED", icon: Truck, tone: "text-purple-700 bg-purple-50" },
     { label: "Payment pending", hint: "COD or unpaid placed orders", count: paymentPending, href: "/admin/orders?status=PAYMENT_PENDING", icon: Wallet, tone: "text-sky-700 bg-sky-50" },
     { label: "Low stock", hint: "Variants at or below their limit", count: lowStockCount, href: "/admin/products?stock=low", icon: AlertTriangle, tone: "text-red-700 bg-red-50" },
   ];
