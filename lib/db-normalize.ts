@@ -5,7 +5,12 @@
  * (Category, Product, ProductVariant, Order, OrderItem) with camelCase columns.
  * Our admin UI and admin-store.tsx use snake_case. These functions translate
  * between the two so ONLY API routes need updating — no changes to admin pages.
+ *
+ * Times: the date columns return UTC without a zone, so every created_at/updated_at goes
+ * through dbTimeToIso — otherwise the admin shows times 5½ hours early.
  */
+
+import { dbTimeToIso } from "@/lib/utils";
 
 // ── Category ───────────────────────────────────────────────
 
@@ -17,7 +22,7 @@ export function normalizeCategory(c: Record<string, unknown>) {
     description: (c.description as string) || null,
     image_url: (c.imageUrl as string) || null,
     sort_order: (c.sortOrder as number) || 0,
-    created_at: c.createdAt as string,
+    created_at: dbTimeToIso(c.createdAt as string),
   };
 }
 
@@ -44,8 +49,8 @@ export function normalizeVariant(v: Record<string, unknown>) {
     selling_price_override: (v.sellingPriceOverride as number) ?? null,
     mrp_override: (v.mrpOverride as number) ?? null,
     images: (v.images as string[]) || [],
-    created_at: v.createdAt as string,
-    updated_at: v.updatedAt as string,
+    created_at: dbTimeToIso(v.createdAt as string),
+    updated_at: dbTimeToIso(v.updatedAt as string),
   };
 }
 
@@ -84,8 +89,8 @@ export function normalizeSubCategory(s: Record<string, unknown>) {
     slug: s.slug as string,
     category_id: (s.categoryId as string) || (s.category_id as string),
     sort_order: (s.sortOrder as number) || (s.sort_order as number) || 0,
-    created_at: s.createdAt as string,
-    updated_at: s.updatedAt as string,
+    created_at: dbTimeToIso(s.createdAt as string),
+    updated_at: dbTimeToIso(s.updatedAt as string),
   };
 }
 
@@ -114,8 +119,8 @@ export function normalizeProduct(p: Record<string, unknown>) {
     specifications: (p.specifications as Record<string, string>) || {},
     whats_in_the_box: (p.whatsInTheBox as string[]) || [],
     badge_type: (p.badgeType as string) || null,
-    created_at: p.createdAt as string,
-    updated_at: p.updatedAt as string,
+    created_at: dbTimeToIso(p.createdAt as string),
+    updated_at: dbTimeToIso(p.updatedAt as string),
     categories: p.Category
       ? { id: (p.Category as Record<string, unknown>).id, name: (p.Category as Record<string, unknown>).name }
       : null,
@@ -236,8 +241,8 @@ export function normalizeOrder(o: Record<string, unknown>) {
     shiprocket_awb: (o.shiprocketAwb as string) || null,
     courier_name: (o.courierName as string) || null,
     timeline: (o.timeline as unknown[]) || [],
-    created_at: o.createdAt as string,
-    updated_at: o.updatedAt as string,
+    created_at: dbTimeToIso(o.createdAt as string),
+    updated_at: dbTimeToIso(o.updatedAt as string),
     order_items: ((o.OrderItem as Record<string, unknown>[]) || []).map(normalizeOrderItem),
   };
 }

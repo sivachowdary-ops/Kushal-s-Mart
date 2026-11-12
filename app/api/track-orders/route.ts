@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { dbTimeToIso } from "@/lib/utils";
 
 /**
  * GET /api/track-orders?phone=XXXXXXXXXX
@@ -69,8 +70,9 @@ export async function GET(request: Request) {
     const currentStatus = (o.status as string) || "PENDING";
     const statusOrder = ["PENDING", "PROCESSING", "PACKED", "SHIPPED", "DELIVERED"];
     const currentIdx = statusOrder.indexOf(currentStatus);
-    const createdAt = (o.createdAt as string) || new Date().toISOString();
-    const updatedAt = (o.updatedAt as string) || createdAt;
+    // Stored as UTC without a zone — mark it, or the tracking page shows times 5½ hours early
+    const createdAt = dbTimeToIso(o.createdAt as string) || new Date().toISOString();
+    const updatedAt = dbTimeToIso(o.updatedAt as string) || createdAt;
 
     const rawAwb = (o.shiprocketAwb as string) || "";
     const cleanAwb = rawAwb && !rawAwb.startsWith("KM-") && rawAwb !== o.orderNumber ? rawAwb : null;

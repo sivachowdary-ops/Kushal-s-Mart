@@ -89,10 +89,25 @@ export function truncate(text: string, maxLength: number): string {
 const SHOP_TIME_ZONE = "Asia/Kolkata";
 
 /**
+ * The database's Prisma date columns hold UTC but return it without a zone
+ * ("2026-11-09T15:02:14.233"), and browsers read that as local time — 5½ hours early in India.
+ * This marks such a time as UTC; anything that already has a zone is returned unchanged.
+ */
+export function dbTimeToIso<T>(value: T): T {
+  if (typeof value !== "string") return value;
+  const m = value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
+  return (m ? `${m[1]}T${m[2]}Z` : value) as T;
+}
+
+function toDate(date: Date | string): Date {
+  return typeof date === "string" ? new Date(dbTimeToIso(date)) : date;
+}
+
+/**
  * Format a date and time for display in 24-hour IST (e.g. "26 Aug 2026, 15:42").
  */
 export function formatDate(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = toDate(date);
   return `${formatDateShort(d)}, ${formatTime(d)}`;
 }
 
@@ -100,7 +115,7 @@ export function formatDate(date: Date | string): string {
  * Format a time for display in 24-hour IST (e.g. "15:42").
  */
 export function formatTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = toDate(date);
   return d.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -113,7 +128,7 @@ export function formatTime(date: Date | string): string {
  * Format a date for display without time in IST (e.g. "26 Aug 2026").
  */
 export function formatDateShort(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = toDate(date);
   return d.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
