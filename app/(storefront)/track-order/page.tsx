@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Package, Search, CheckCircle2, Clock, Truck, ChevronDown, ChevronUp, Smartphone, AlertCircle } from "lucide-react";
+import { isRtcCourier } from "@/lib/shipping";
+import { RtcShipmentBox } from "@/components/storefront/rtc-shipment-box";
 
 interface OrderItem {
   id: string;
@@ -142,8 +144,9 @@ function OrderCard({ order }: { order: TrackedOrder }) {
           </p>
         </div>
 
-        {/* AWB / Courier */}
-        {order.shiprocket_awb && !order.shiprocket_awb.startsWith("KM-") && order.shiprocket_awb !== order.order_number && (
+        {/* AWB / Courier — APSRTC parcels get their own box with the LR number */}
+        {order.shiprocket_awb && isRtcCourier(order.courier_name) && <RtcShipmentBox lr={order.shiprocket_awb} courierName={order.courier_name} />}
+        {order.shiprocket_awb && !isRtcCourier(order.courier_name) && !order.shiprocket_awb.startsWith("KM-") && order.shiprocket_awb !== order.order_number && (
           <div className="mt-4 bg-gray-50 rounded-2xl p-3 border border-gray-200/60 flex items-center gap-3 text-xs">
             <Truck className="h-4 w-4 text-red-600 shrink-0" />
             <div>
@@ -284,6 +287,7 @@ export default function TrackOrderPage() {
         // Only fetch live tracking for orders with actual AWB (not KM- order numbers) that aren't delivered/cancelled
         if (
           !order.shiprocket_awb ||
+          isRtcCourier(order.courier_name) || // APSRTC: no Delhivery tracking; the LR box links to APSRTC
           order.shiprocket_awb.startsWith("KM-") ||
           order.shiprocket_awb === order.order_number ||
           ["DELIVERED", "CANCELLED", "COMPLETED"].includes(order.status)

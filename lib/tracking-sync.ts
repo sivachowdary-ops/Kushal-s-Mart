@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getDelhiveryTrackingStatus, type DelhiveryTrackingResult } from "@/lib/delhivery";
+import { isRtcCourier } from "@/lib/shipping";
 
 type TimelineEntry = { status: string; timestamp: string; note?: string };
 
@@ -88,18 +89,27 @@ export async function applyTrackingToOrder(
  * Least recently updated first, so every shipment gets its turn when there are more than `limit`.
  */
 export async function syncActiveShipments(limit = 50): Promise<{ synced: number; updated: number; failed: number }> {
-  const { data: activeOrders, error } = await supabaseAdmin
-    .from("Order")
-    .select("id, orderNumber, shiprocketAwb, status, timeline")
-    .not("shiprocketAwb", "is", null)
-    .in("status", TRACKABLE_STATUSES)
-    .order("updatedAt", { ascending: true })
-    .limit(limit);
+  const query = (skipRtcInDb: boolean) => {
+    let q = supabaseAdmin
+      .from("Order")
+      .select("id, orderNumber, shiprocketAwb, courierName, status, timeline")
+      .not("shiprocketAwb", "is", null)
+      .in("status", TRACKABLE_STATUSES);
+    // APSRTC parcels hold an LR number, not a Delhivery AWB; their status is set by hand
+    if (skipRtcInDb) q = q.or("courierName.is.null,courierName.not.ilike.APSRTC*");
+    return q.order("updatedAt", { ascending: true }).limit(limit);
+  };
+  let { data: activeOrders, error } = await query(true);
+  if (error) {
+    // Never let the filter stop Delhivery tracking — APSRTC orders are also skipped below
+    console.warn("[Tracking sync] APSRTC filter failed, retrying without it:", error.message);
+    ({ data: activeOrders, error } = await query(false));
+  }
   if (error) throw new Error(error.message);
 
   let updated = 0;
   let failed = 0;
-  for (const order of activeOrders || []) {
+  for (const order of (activeOrders || []).filter((o) => !isRtcCourier(o.courierName))) {
     try {
       const tracking = await getDelhiveryTrackingStatus(order.shiprocketAwb);
       if (!tracking.success) {

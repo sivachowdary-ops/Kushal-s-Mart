@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createDelhiveryShipment } from "@/lib/delhivery";
 import { normalizeOrder } from "@/lib/db-normalize";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { isRtcCourier } from "@/lib/shipping";
 
 export async function POST(
   request: Request,
@@ -31,8 +32,12 @@ export async function POST(
     // Prevent duplicate dispatch attempts if a real AWB already exists. Older orders can hold the
     // order number ("KM-…") in this field instead of an AWB — those still need a real shipment.
     const existingAwb = (order.shiprocket_awb || "").trim();
+    // An APSRTC LR number lives in the same field; switching such an order to Delhivery books a real AWB.
     const hasRealAwb =
-      existingAwb !== "" && !existingAwb.startsWith("KM-") && existingAwb !== order.order_number;
+      existingAwb !== "" &&
+      !existingAwb.startsWith("KM-") &&
+      existingAwb !== order.order_number &&
+      !isRtcCourier(order.courier_name);
     if (hasRealAwb) {
       return NextResponse.json(
         {

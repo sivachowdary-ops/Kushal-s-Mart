@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { dbTimeToIso } from "@/lib/utils";
+import { isRtcCourier } from "@/lib/shipping";
 
 /**
  * GET /api/track-orders?phone=XXXXXXXXXX
@@ -76,6 +77,8 @@ export async function GET(request: Request) {
 
     const rawAwb = (o.shiprocketAwb as string) || "";
     const cleanAwb = rawAwb && !rawAwb.startsWith("KM-") && rawAwb !== o.orderNumber ? rawAwb : null;
+    // APSRTC bookings keep the LR number in the same field; they're tracked on APSRTC's portal, not Delhivery
+    const isRtc = isRtcCourier(o.courierName as string);
 
     // Normalize status into chronological 5-stage pipeline:
     // 1: PENDING (Placed) -> 2: PROCESSING (Paid) -> 3: PACKED (AWB created) -> 4: SHIPPED / OUT_FOR_DELIVERY -> 5: DELIVERED
@@ -112,13 +115,23 @@ export async function GET(request: Request) {
       timeline.push({ status: "PROCESSING", timestamp: updatedAt, note: "Payment verified, order preparing for packing" });
     }
     if (stageLevel >= 3) {
-      timeline.push({ status: "PACKED", timestamp: updatedAt, note: `Packed & ready for dispatch with ${o.courierName || "Delhivery Express"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}` });
+      timeline.push({
+        status: "PACKED",
+        timestamp: updatedAt,
+        note: isRtc
+          ? `Booked with APSRTC bus parcel${cleanAwb ? ` (LR: ${cleanAwb})` : ""}`
+          : `Packed & ready for dispatch with ${o.courierName || "Delhivery Express"}${cleanAwb ? ` (AWB: ${cleanAwb})` : ""}`,
+      });
     }
     if (stageLevel >= 4) {
       timeline.push(
         rawStatus === "PICKED_UP"
           ? { status: "PICKED_UP", timestamp: updatedAt, note: "Picked up by the courier" }
-          : { status: rawStatus === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY" : "IN_TRANSIT", timestamp: updatedAt, note: `Package dispatched and moving in transit` }
+          : {
+              status: rawStatus === "OUT_FOR_DELIVERY" ? "OUT_FOR_DELIVERY" : "IN_TRANSIT",
+              timestamp: updatedAt,
+              note: isRtc ? "Travelling by APSRTC bus" : `Package dispatched and moving in transit`,
+            }
       );
     }
     if (stageLevel >= 5) {
@@ -137,7 +150,7 @@ export async function GET(request: Request) {
       courier_name: o.courierName,
       shiprocket_awb: cleanAwb,
       tracking_awb: cleanAwb,
-      tracking_url: cleanAwb ? `https://www.delhivery.com/track/package/${cleanAwb}` : null,
+      tracking_url: cleanAwb && !isRtc ? `https://www.delhivery.com/track/package/${cleanAwb}` : null,
       created_at: createdAt,
       timeline,
       items: rawItems,

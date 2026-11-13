@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getDelhiveryTrackingStatus } from "@/lib/delhivery";
 import { applyTrackingToOrder } from "@/lib/tracking-sync";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { isRtcCourier } from "@/lib/shipping";
 
 /**
  * GET /api/orders/[orderNumber]/tracking
@@ -36,6 +37,10 @@ export async function GET(
     if (error || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     if (!order.shiprocketAwb || order.shiprocketAwb.startsWith("KM-") || order.shiprocketAwb === order.orderNumber) {
       return NextResponse.json({ hasTracking: false, message: "No active shipment AWB yet" });
+    }
+    // APSRTC parcels: the LR number is tracked on APSRTC's portal; the shop sets the status by hand
+    if (isRtcCourier(order.courierName)) {
+      return NextResponse.json({ hasTracking: false, message: "Tracked on the APSRTC portal with the LR number" });
     }
 
     const tracking = await getDelhiveryTrackingStatus(order.shiprocketAwb);

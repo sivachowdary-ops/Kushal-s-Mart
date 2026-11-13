@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cancelDelhiveryShipment } from "@/lib/delhivery";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { isRtcCourier } from "@/lib/shipping";
 
 /**
  * POST /api/admin/orders/[id]/delhivery/cancel
@@ -30,7 +31,8 @@ export async function POST(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!order.shiprocketAwb) {
+    // An APSRTC booking keeps its LR number in the same field — never send that to Delhivery
+    if (!order.shiprocketAwb || isRtcCourier(order.courierName)) {
       return NextResponse.json(
         { error: "No active Delhivery shipment found on this order" },
         { status: 400 }

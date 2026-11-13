@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
-import { createDelhiveryShipment } from "@/lib/delhivery";
 
 /** Order statuses a captured payment may move to PAID. */
 const PAYABLE_STATUSES = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
@@ -10,7 +9,8 @@ const PAYABLE_STATUSES = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
  * POST /api/webhooks/razorpay
  *
  * THE SINGLE SOURCE OF TRUTH for payment confirmation.
- * Only this handler marks orders as PAID, decrements stock, and triggers shipment.
+ * Only this handler marks orders as PAID and decrements stock. Shipping is booked by hand
+ * from the admin (Delhivery or APSRTC) after the shop has called the customer.
  *
  * Critical implementation notes:
  * 1. Raw body must be read as text BEFORE any JSON.parse for signature verification.
@@ -18,8 +18,7 @@ const PAYABLE_STATUSES = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
  * 3. Idempotent — the Order is "claimed" with a single conditional UPDATE, so
  *    duplicate or concurrent deliveries (order.paid + payment.captured) are no-ops.
  * 4. Stock decrement is atomic via Postgres RPC function.
- * 5. Delhivery shipment creation happens AFTER the payment is recorded —
- *    if it fails, payment still stands and admin dispatches manually.
+ * 5. No shipment is created here; the order waits under "To dispatch" in the admin.
  * 6. Errors BEFORE the claim return 500 so Razorpay retries; after the claim,
  *    a retry is a harmless no-op.
  */
@@ -164,76 +163,9 @@ export async function POST(request: Request) {
         }
       }
 
-      // ── 5e. AFTER payment confirmed — trigger Delhivery shipment ────────
-      try {
-        const { data: fullOrder } = await supabaseAdmin
-          .from("Order")
-          .select("*, OrderItem (*)")
-          .eq("id", internalOrderId)
-          .single();
-
-        if (fullOrder && !fullOrder.shiprocketAwb) {
-          const shippingAddr = (fullOrder.shippingAddress || {}) as {
-            address?: string;
-            city?: string;
-            state?: string;
-            pincode?: string;
-          };
-
-          const shipmentItems = (fullOrder.OrderItem || []).map(
-            (oi: { productName: string; variantName?: string | null; quantity: number; unitPrice: number }) => ({
-              productName: oi.productName,
-              variantName: oi.variantName,
-              quantity: oi.quantity,
-              unitPrice: oi.unitPrice,
-              weightGrams: 500, // Default 500g per item (approved by owner)
-            })
-          );
-
-          const result = await createDelhiveryShipment({
-            orderId: internalOrderId,
-            orderNumber: fullOrder.orderNumber,
-            customerName: fullOrder.customerName,
-            customerPhone: fullOrder.customerPhone,
-            customerEmail: fullOrder.customerEmail || undefined,
-            shippingAddress: {
-              address: shippingAddr.address || "",
-              city: shippingAddr.city || "",
-              state: shippingAddr.state || "",
-              pincode: shippingAddr.pincode || "",
-            },
-            items: shipmentItems,
-            totalAmount: fullOrder.total,
-            paymentMode: "prepaid",
-          });
-
-          if (result.success && result.waybill) {
-            await supabaseAdmin
-              .from("Order")
-              .update({
-                shiprocketAwb: result.waybill,
-                courierName: result.courierName,
-                status: "PACKED",
-                updatedAt: new Date().toISOString(),
-              })
-              .eq("id", internalOrderId);
-
-            console.log(
-              `[Razorpay Webhook] ✅ Delhivery AWB created: ${result.waybill} for order ${fullOrder.orderNumber}`
-            );
-          } else {
-            console.warn(
-              `[Razorpay Webhook] ⚠️ Delhivery failed for ${fullOrder.orderNumber}: ${result.error || "No waybill returned"}`
-            );
-          }
-        }
-      } catch (shipErr) {
-        // Delhivery failure must NEVER roll back the payment
-        console.error(
-          "[Razorpay Webhook] Delhivery shipment creation failed — admin must dispatch manually:",
-          shipErr
-        );
-      }
+      // ── 5e. No automatic shipment ────────────────────────────────────────
+      // The shop calls each customer first and then books Delhivery or APSRTC by hand from the
+      // admin order page, so a paid order waits under "To dispatch" instead of being auto-booked.
 
       console.log(`[Razorpay Webhook] Payment confirmed for order ${paidOrder.orderNumber}`);
     }

@@ -188,7 +188,9 @@ interface AdminStoreContextType {
   updateOrderShipping: (
     id: string,
     courier: string,
-    awb: string
+    awb: string,
+    /** Optional status saved in the same request, e.g. IN_TRANSIT when an APSRTC LR is entered */
+    status?: string
   ) => Promise<boolean>;
   refreshOrders: () => Promise<void>;
   /** Pulls the latest Delhivery status for active shipments, then reloads orders if any changed */
@@ -615,7 +617,8 @@ export function AdminStoreProvider({
     async (
       id: string,
       courier: string,
-      awb: string
+      awb: string,
+      status?: string
     ): Promise<boolean> => {
       try {
         const headers = await getAuthHeaders();
@@ -625,6 +628,7 @@ export function AdminStoreProvider({
           body: JSON.stringify({
             shiprocket_awb: awb,
             courier_name: courier,
+            ...(status ? { status } : {}),
           }),
         });
         if (res.ok) {

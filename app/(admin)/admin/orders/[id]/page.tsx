@@ -5,7 +5,9 @@ import { useAdminStore } from "@/lib/admin-store";
 import { supabase } from "@/lib/supabase-client";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
-import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw } from "lucide-react";
+import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw, Bus } from "lucide-react";
+import { deliveryMethodOf, isRtcCourier, rtcCourierName, rtcNumberOf, RTC_PORTAL_URL, type DeliveryMethod } from "@/lib/shipping";
+import { orderStatusLabel } from "@/lib/admin-ui";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -20,6 +22,13 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [isDispatchingDelhivery, setIsDispatchingDelhivery] = useState(false);
   const [isCancellingDelhivery, setIsCancellingDelhivery] = useState(false);
   const [delhiverySuccessMsg, setDelhiverySuccessMsg] = useState<string | null>(null);
+
+  // Delivery method chosen after calling the customer, and the APSRTC booking details
+  const [shipMethod, setShipMethod] = useState<DeliveryMethod | null>(null);
+  const [manualAwb, setManualAwb] = useState("");
+  const [lrNumber, setLrNumber] = useState("");
+  const [rtcNumber, setRtcNumber] = useState("");
+  const [shipMsg, setShipMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Refund state
   const [showRefundForm, setShowRefundForm] = useState(false);
@@ -40,6 +49,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       setStatus(order.status);
       setCourierName(order.courier_name || "");
       setAwb(order.shiprocket_awb || "");
+      const rtc = isRtcCourier(order.courier_name);
+      setShipMethod(deliveryMethodOf(order));
+      setLrNumber(rtc ? order.shiprocket_awb || "" : "");
+      setRtcNumber(rtcNumberOf(order.courier_name));
     }
   }, [order]);
 
@@ -134,6 +147,66 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     }
   };
 
+  /** Delhivery AWB the admin created on Delhivery.com and typed in */
+  const handleSaveManualAwb = async () => {
+    if (!order) return;
+    const value = manualAwb.trim();
+    if (!value) {
+      setShipMsg({ type: "error", text: "Enter the AWB number from Delhivery first." });
+      return;
+    }
+    setIsSaving(true);
+    setShipMsg(null);
+    try {
+      const nextStatus = ["PAID", "PROCESSING"].includes(order.status) ? "PACKED" : undefined;
+      const ok = await updateOrderShipping(id, "Delhivery Express", value, nextStatus);
+      setShipMsg(ok
+        ? { type: "success", text: `✓ Delhivery AWB ${value} saved. Tracking will update automatically.` }
+        : { type: "error", text: "Couldn't save the AWB. Please refresh and try again." });
+      if (ok) setManualAwb("");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /** APSRTC booking: LR number (what the customer tracks with) and the number RTC gave */
+  const handleSaveRtc = async () => {
+    if (!order) return;
+    const lr = lrNumber.trim();
+    if (!lr) {
+      setShipMsg({ type: "error", text: "Enter the LR number from the APSRTC receipt." });
+      return;
+    }
+    setIsSaving(true);
+    setShipMsg(null);
+    try {
+      // Booking with RTC means the parcel is on its way
+      const nextStatus = ["PAID", "PROCESSING", "PACKED"].includes(order.status) ? "IN_TRANSIT" : undefined;
+      const ok = await updateOrderShipping(id, rtcCourierName(rtcNumber), lr, nextStatus);
+      setShipMsg(ok
+        ? { type: "success", text: `✓ APSRTC booking saved (LR ${lr}). The customer can now see it on Track Order.` }
+        : { type: "error", text: "Couldn't save the APSRTC details. Please refresh and try again." });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /** One-tap status for APSRTC orders, which have no automatic tracking */
+  const handleRtcStatus = async (next: string) => {
+    if (!order) return;
+    setIsSaving(true);
+    setShipMsg(null);
+    try {
+      const ok = await updateOrderStatus(id, next);
+      if (ok) setStatus(next);
+      setShipMsg(ok
+        ? { type: "success", text: `✓ Marked as ${orderStatusLabel(next).toLowerCase()}.` }
+        : { type: "error", text: "Couldn't update the status. Please refresh and try again." });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleRefund = async () => {
     if (!order) return;
     const amountPaise = Math.round(parseFloat(refundAmount) * 100);
@@ -197,6 +270,14 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     order.payment_status === "PARTIALLY_REFUNDED" ||
     order.status === "PAID";
   const address = order.shipping_address as Record<string, string> | string | null;
+  // Which service already has this parcel; an APSRTC LR sits in the same field as a Delhivery AWB
+  const rtcBooked = isRtcCourier(order.courier_name) && Boolean(order.shiprocket_awb);
+  const delhiveryBooked = Boolean(
+    order.shiprocket_awb &&
+    !order.shiprocket_awb.startsWith("KM-") &&
+    order.shiprocket_awb !== order.order_number &&
+    !isRtcCourier(order.courier_name)
+  );
 
   return (
     <div className="space-y-6">
@@ -287,14 +368,55 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               </h2>
               {order.shiprocket_awb && (
                 <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
-                  AWB: {order.shiprocket_awb}
+                  {rtcBooked ? `APSRTC LR: ${order.shiprocket_awb}` : `AWB: ${order.shiprocket_awb}`}
                 </span>
               )}
             </div>
 
-            {/* Delhivery Express 1-Click Dispatch Card */}
-            {(() => {
-              const hasValidAwb = Boolean(order.shiprocket_awb && !order.shiprocket_awb.startsWith("KM-") && order.shiprocket_awb !== order.order_number);
+            {/* Step 1: after calling the customer, pick the delivery service */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery method (ask the customer)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShipMethod("DELHIVERY"); setShipMsg(null); }}
+                  className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-black transition-colors cursor-pointer ${
+                    shipMethod === "DELHIVERY" ? "border-red-600 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  <Truck className="h-5 w-5" /> Delhivery
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShipMethod("APSRTC"); setShipMsg(null); }}
+                  disabled={delhiveryBooked}
+                  title={delhiveryBooked ? "Cancel the Delhivery shipment first" : undefined}
+                  className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-black transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    shipMethod === "APSRTC" ? "border-amber-500 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  <Bus className="h-5 w-5" /> APSRTC
+                </button>
+              </div>
+              {!shipMethod && (
+                <p className="text-xs text-slate-500">Not booked yet. Call the customer, then choose Delhivery or APSRTC.</p>
+              )}
+              {delhiveryBooked && (
+                <p className="text-xs text-slate-500">Booked with Delhivery. To send it by APSRTC instead, cancel the Delhivery shipment first.</p>
+              )}
+            </div>
+
+            {shipMsg && (
+              <p className={`text-xs font-bold p-2.5 rounded-xl border ${
+                shipMsg.type === "success" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-red-700 bg-red-50 border-red-200"
+              }`}>
+                {shipMsg.text}
+              </p>
+            )}
+
+            {/* Delhivery: 1-click booking, or an AWB created on Delhivery.com */}
+            {shipMethod === "DELHIVERY" && (() => {
+              const hasValidAwb = delhiveryBooked;
               return (
                 <div className="bg-red-50/70 border border-red-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
                   <div className="flex items-center justify-between">
@@ -361,7 +483,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <div className="space-y-2 pt-1">
                   {isPaid ? (
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
-                      ⚡ Payment Confirmed: Ready for automatic / 1-click Delhivery dispatch.
+                      ⚡ Payment confirmed: ready to book with Delhivery.
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800">
@@ -377,15 +499,120 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     <Truck className="h-4 w-4" />
                     <span>{isDispatchingDelhivery ? "Connecting to Delhivery.com..." : "Dispatch with Delhivery Express (Generate AWB)"}</span>
                   </button>
+
+                  {/* Or: booked on Delhivery's own website — type the AWB here */}
+                  <div className="pt-3 border-t border-red-100 space-y-2">
+                    <label className="block text-xs font-bold text-gray-700">Created the shipment on Delhivery.com? Enter its AWB</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={manualAwb}
+                        onChange={(e) => setManualAwb(e.target.value)}
+                        maxLength={60}
+                        placeholder="Delhivery AWB number"
+                        className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-xs focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveManualAwb}
+                        disabled={isSaving || !isPaid}
+                        className="shrink-0 rounded-xl bg-slate-900 px-4 text-xs font-bold text-white hover:bg-black disabled:opacity-50 cursor-pointer"
+                      >
+                        Save AWB
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
               );
             })()}
 
-            {/* Manual Shipping Override */}
-            <div className="space-y-4 pt-2 border-t border-gray-100">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Manual Courier Override</h3>
+            {/* APSRTC: entered by hand from the RTC receipt; status is updated by hand too */}
+            {shipMethod === "APSRTC" && (
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                <span className="font-black text-xs text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Bus className="h-4 w-4" /> APSRTC bus parcel
+                </span>
+                {!isPaid && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800">
+                    ⛔ This order is not paid ({order.payment_status || "PENDING"}). Do not ship it.
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">LR number</label>
+                    <input
+                      type="text"
+                      value={lrNumber}
+                      onChange={(e) => setLrNumber(e.target.value)}
+                      maxLength={60}
+                      placeholder="From the RTC booking receipt"
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">RTC number</label>
+                    <input
+                      type="text"
+                      value={rtcNumber}
+                      onChange={(e) => setRtcNumber(e.target.value)}
+                      maxLength={30}
+                      placeholder="Number given by RTC"
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveRtc}
+                  disabled={isSaving || !isPaid}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-[#111625] rounded-xl text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Save className="h-4 w-4" /> {rtcBooked ? "Update APSRTC details" : "Save APSRTC booking"}
+                </button>
+
+                {rtcBooked && (
+                  <div className="space-y-2 pt-3 border-t border-amber-200">
+                    <p className="text-xs font-bold text-gray-700">
+                      Status: <span className="text-gray-900">{orderStatusLabel(order.status)}</span>
+                      <span className="font-medium text-gray-500"> · update it as the parcel moves</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRtcStatus("IN_TRANSIT")}
+                        disabled={isSaving || order.status === "IN_TRANSIT" || order.status === "DELIVERED"}
+                        className="py-2.5 rounded-xl border-2 border-indigo-200 bg-white text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 cursor-pointer"
+                      >
+                        In transit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRtcStatus("DELIVERED")}
+                        disabled={isSaving || order.status === "DELIVERED"}
+                        className="py-2.5 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40 cursor-pointer"
+                      >
+                        ✓ Delivered
+                      </button>
+                    </div>
+                    <a
+                      href={RTC_PORTAL_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex text-xs font-bold text-blue-600 hover:underline"
+                    >
+                      Open APSRTC cargo portal ↗
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual Shipping Override — raw fields, for any other courier or corrections */}
+            <details className="pt-2 border-t border-gray-100 group">
+              <summary className="cursor-pointer text-xs font-bold text-gray-500 uppercase tracking-wider py-1">Other courier / edit raw details</summary>
+            <div className="space-y-4 pt-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">Courier Name</label>
@@ -400,6 +627,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 Update Shipping Info
               </button>
             </div>
+            </details>
           </div>
         </div>
 

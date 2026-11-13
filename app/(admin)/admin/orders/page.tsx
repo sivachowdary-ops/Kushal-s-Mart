@@ -6,7 +6,9 @@ import { formatDateShort, formatTime } from "@/lib/utils";
 import { channelLabel, isPaymentPending, needsDispatch, orderStatusClass, orderStatusLabel } from "@/lib/admin-ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer } from "lucide-react";
+import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer, Bus, Truck } from "lucide-react";
+import { deliveryMethodOf } from "@/lib/shipping";
+import type { AdminOrder } from "@/lib/admin-store";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { ALL_DATES, describeDateRange, isInDateRange, resolveDateRange, type DateFilter } from "@/lib/date-range";
 
@@ -32,6 +34,31 @@ const MORE_STATUSES = [
   { value: "PAYMENT_FAILED", label: "✕ Failed payment attempts" },
 ];
 
+/** Delhivery / APSRTC badge, so it's clear at a glance how each order travels */
+function MethodBadge({ order }: { order: AdminOrder }) {
+  const method = deliveryMethodOf(order);
+  if (method === "APSRTC") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+        <Bus className="h-3 w-3" /> APSRTC
+      </span>
+    );
+  }
+  if (method === "DELHIVERY") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-red-50 text-red-700 border border-red-200">
+        <Truck className="h-3 w-3" /> Delhivery
+      </span>
+    );
+  }
+  return null;
+}
+
+/** APSRTC parcels have no automatic tracking, so they get a one-tap "Delivered" right in the list */
+function canMarkRtcDelivered(order: AdminOrder): boolean {
+  return deliveryMethodOf(order) === "APSRTC" && !["DELIVERED", "COMPLETED", "CANCELLED"].includes(order.status);
+}
+
 // useSearchParams needs a Suspense boundary
 export default function OrdersPage() {
   return (
@@ -42,7 +69,19 @@ export default function OrdersPage() {
 }
 
 function OrdersList() {
-  const { orders, isLoading, error, refreshOrders, syncCourierTracking } = useAdminStore();
+  const { orders, isLoading, error, refreshOrders, syncCourierTracking, updateOrderStatus } = useAdminStore();
+  const [methodFilter, setMethodFilter] = useState("ALL");
+  const [markingId, setMarkingId] = useState<string | null>(null);
+
+  const markRtcDelivered = async (order: AdminOrder) => {
+    if (!confirm(`Mark ${order.order_number} (APSRTC) as delivered?`)) return;
+    setMarkingId(order.id);
+    try {
+      if (!(await updateOrderStatus(order.id, "DELIVERED"))) alert("Couldn't update the order. Please try again.");
+    } finally {
+      setMarkingId(null);
+    }
+  };
   const router = useRouter();
   // The dashboard's "Needs action" tiles link here with ?status=...
   const searchParams = useSearchParams();
@@ -81,9 +120,12 @@ function OrdersList() {
     }
 
     const matchesChannel = channelFilter === "ALL" || o.channel === channelFilter;
-    return matchesSearch && matchesStatus && matchesChannel;
+    const method = deliveryMethodOf(o);
+    const matchesMethod = methodFilter === "ALL" || (methodFilter === "NONE" ? method === null : method === methodFilter);
+    return matchesSearch && matchesStatus && matchesChannel && matchesMethod;
   });
-  const filtersActive = search || statusFilter !== "ALL" || channelFilter !== "ALL" || dateFilter.preset !== "all";
+  const filtersActive =
+    search || statusFilter !== "ALL" || channelFilter !== "ALL" || methodFilter !== "ALL" || dateFilter.preset !== "all";
   const isMoreStatus = MORE_STATUSES.some((s) => s.value === statusFilter);
 
   if (isLoading && orders.length === 0) {
@@ -119,15 +161,29 @@ function OrdersList() {
               className="w-full rounded-lg border border-slate-300 pl-10 pr-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:gap-4">
           <select
             value={channelFilter}
             onChange={(e) => setChannelFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            aria-label="Channel"
+            className="min-w-0 rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="ALL">All Channels</option>
             <option value="ONLINE">Online Store</option>
             <option value="OFFLINE">Counter (POS)</option>
           </select>
+          <select
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            aria-label="Delivery method"
+            className="min-w-0 rounded-lg border border-slate-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="ALL">All delivery methods</option>
+            <option value="DELHIVERY">Delhivery</option>
+            <option value="APSRTC">APSRTC</option>
+            <option value="NONE">Not booked yet</option>
+          </select>
+          </div>
         </div>
 
         {/* Status buttons and date range */}
@@ -190,6 +246,7 @@ function OrdersList() {
                   setSearch("");
                   setStatusFilter("ALL");
                   setChannelFilter("ALL");
+                  setMethodFilter("ALL");
                   setDateFilter(ALL_DATES);
                 }}
                 className="mt-4 text-blue-600 hover:underline"
@@ -217,6 +274,7 @@ function OrdersList() {
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${orderStatusClass(order.status)}`}>
                       {orderStatusLabel(order.status)}
                     </span>
+                    <MethodBadge order={order} />
                     {needsDispatch(order) && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                         Needs dispatch
@@ -229,6 +287,18 @@ function OrdersList() {
                     )}
                   </div>
                 </Link>
+                {canMarkRtcDelivered(order) && (
+                  <div className="px-4 pb-3 -mt-1">
+                    <button
+                      type="button"
+                      onClick={() => markRtcDelivered(order)}
+                      disabled={markingId === order.id}
+                      className="w-full rounded-lg bg-emerald-600 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                    >
+                      {markingId === order.id ? "Saving…" : "✓ Mark APSRTC parcel delivered"}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -281,6 +351,7 @@ function OrdersList() {
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${orderStatusClass(order.status)}`}>
                           {orderStatusLabel(order.status)}
                         </span>
+                        <MethodBadge order={order} />
                         {needsDispatch(order) && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
                             NEEDS DISPATCH
@@ -288,7 +359,7 @@ function OrdersList() {
                         )}
                         {order.shiprocket_awb && (
                           <span className="text-[10px] font-mono text-slate-500">
-                            AWB: {order.shiprocket_awb}
+                            {deliveryMethodOf(order) === "APSRTC" ? "LR" : "AWB"}: {order.shiprocket_awb}
                           </span>
                         )}
                       </div>
@@ -314,6 +385,17 @@ function OrdersList() {
                     <td className="px-6 py-4 text-right">
                       {/* Icon links keep their own job instead of opening the row */}
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        {canMarkRtcDelivered(order) && (
+                          <button
+                            type="button"
+                            onClick={() => markRtcDelivered(order)}
+                            disabled={markingId === order.id}
+                            title="Mark this APSRTC parcel as delivered"
+                            className="mr-1 whitespace-nowrap rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                          >
+                            {markingId === order.id ? "Saving…" : "✓ Delivered"}
+                          </button>
+                        )}
                         <Link
                           href={`/admin/orders/${order.id}/kot`}
                           target="_blank"
