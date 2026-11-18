@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeCategory, toCategoryDB } from "@/lib/db-normalize";
 import { verifyAdmin, verifyAdminOrStaff } from "@/lib/admin-auth";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 // CHANGED: table "categories" → "Category", column "sort_order" → "sortOrder"
 export async function GET(request: Request) {
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    revalidateStorefront("category create");
     return NextResponse.json(normalizeCategory(data), { status: 201 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to create category";

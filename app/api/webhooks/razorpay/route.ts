@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 /** Order statuses a captured payment may move to PAID. */
 const PAYABLE_STATUSES = ["PENDING_PAYMENT", "PAYMENT_FAILED"];
@@ -162,6 +163,9 @@ export async function POST(request: Request) {
           console.error(`[Razorpay Webhook] Stock operation error for ${item.variantId}:`, stockErr);
         }
       }
+
+      // Stock changed: cached product pages refresh on their next visit (never throws)
+      revalidateStorefront(`payment for ${paidOrder.orderNumber}`);
 
       // ── 5e. No automatic shipment ────────────────────────────────────────
       // The shop calls each customer first and then books Delhivery or APSRTC by hand from the

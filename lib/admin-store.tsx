@@ -350,8 +350,9 @@ export function AdminStoreProvider({
   }, []);
 
   const syncCourierTracking = useCallback(async () => {
-    // At most every 2 minutes from this tab; the server has the same limit
-    if (Date.now() - lastCourierSyncAt < 2 * 60 * 1000) return;
+    // At most every 15 minutes from this tab (each run checks up to 50 shipments with Delhivery);
+    // the nightly cron covers the rest
+    if (Date.now() - lastCourierSyncAt < 15 * 60 * 1000) return;
     lastCourierSyncAt = Date.now();
     try {
       const headers = await getAuthHeaders();

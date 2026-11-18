@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeOrder } from "@/lib/db-normalize";
 import { verifyAdminOrStaff } from "@/lib/admin-auth";
 import { generateOrderNumber, isOrderNumberClash } from "@/lib/order-number";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 const POS_PAYMENT_MODES = ["CASH", "UPI", "CARD"];
 const MAX_POS_QTY = 999;
@@ -207,6 +208,8 @@ export async function POST(request: Request) {
         console.warn("Stock decrement warning for POS sale", oi.variantId, stkErr);
       }
     }
+    // Shop stock changed: cached product pages refresh on their next visit (never throws)
+    revalidateStorefront(`POS sale ${dbOrder.orderNumber}`);
 
     const { data: fullOrder } = await supabaseAdmin
       .from("Order")

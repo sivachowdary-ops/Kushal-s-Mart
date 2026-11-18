@@ -60,8 +60,7 @@ export default function AdminDashboardPage() {
     revenueOrders,
     onlineSalesTotal,
     counterSalesTotal,
-    getProductFinancialStats,
-    syncCourierTracking
+    getProductFinancialStats
   } = useAdminStore();
 
   const router = useRouter();
@@ -70,11 +69,6 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Pull the latest Delhivery status so Picked up / In transit / Delivered are current
-  useEffect(() => {
-    syncCourierTracking();
-  }, [syncCourierTracking]);
 
   if (!mounted || isLoading) {
     return (

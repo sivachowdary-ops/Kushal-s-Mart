@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { CATALOG_TAG } from "@/lib/revalidate-storefront";
 import fallbackData from "./fallback-catalog.json";
 
 export interface StorefrontCategory {
@@ -56,11 +58,9 @@ export interface StorefrontProduct {
   variants: StorefrontVariant[];
 }
 
-// In-memory persistent cache with 30s TTL
-let cachedCategories: StorefrontCategory[] = (fallbackData.categories || []) as StorefrontCategory[];
-let cachedRawProducts: any[] = fallbackData.products || [];
-let lastFetchTime = 0;
-const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+// Last catalog loaded successfully on this server — only used if the database can't be reached
+let lastGoodCategories: StorefrontCategory[] = (fallbackData.categories || []) as StorefrontCategory[];
+let lastGoodRawProducts: any[] = fallbackData.products || [];
 
 // The home, shop-by-category and product pages all read this cached catalogue, so it must hold
 // every active product. It used to stop at the 60 newest, which hid older products — e.g. only 9 of
@@ -266,103 +266,83 @@ export const DEFAULT_SUBCATEGORIES: StorefrontSubCategory[] = [
   { id: "sub-rc-on-road", name: "On Road", slug: "on-road", categoryId: "cat-rc-cars", category_id: "cat-rc-cars", sortOrder: 2, sort_order: 2 },
 ];
 
-/**
- * Fetches homepage products and categories with built-in retry and in-memory fallback.
- * Prevents the homepage from EVER displaying "Coming Soon" due to cold starts or network glitches.
- */
-export async function getStorefrontData(forceRefresh = false): Promise<{
-  categories: StorefrontCategory[];
-  subcategories: StorefrontSubCategory[];
-  allProducts: StorefrontProduct[];
-}> {
-  const now = Date.now();
-  if (
-    !forceRefresh &&
-    cachedCategories.length > 0 &&
-    cachedRawProducts.length > 0 &&
-    now - lastFetchTime < CACHE_TTL_MS
-  ) {
-    const categorySlugMap = new Map<string, string>();
-    cachedCategories.forEach((c) => categorySlugMap.set(c.id, c.slug));
-    return {
-      categories: cachedCategories,
-      subcategories: DEFAULT_SUBCATEGORIES,
-      allProducts: cachedRawProducts.map((p) => normalizeStoreProduct(p, categorySlugMap)),
-    };
-  }
+const CATEGORY_SELECT = "id, name, slug, description, imageUrl, sortOrder";
+const PRODUCT_SELECT = `
+  id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description, createdAt,
+  Category ( id, name, slug ),
+  ProductVariant ( id, name, sku, stock, lowStockThreshold, sellingPriceOverride, mrpOverride, images )
+`;
 
-  try {
+export interface CatalogRows {
+  categories: StorefrontCategory[];
+  rawProducts: any[];
+}
+
+/**
+ * Reads the whole catalog once, retrying a transient failure. Throws rather than returning an
+ * empty result, so a database hiccup never gets cached.
+ */
+async function loadCatalogRows(): Promise<CatalogRows> {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const [catRes, prodRes] = await Promise.all([
-      supabaseAdmin
-        .from("Category")
-        .select("id, name, slug, description, imageUrl, sortOrder")
-        .order("sortOrder", { ascending: true }),
+      supabaseAdmin.from("Category").select(CATEGORY_SELECT).order("sortOrder", { ascending: true }),
       supabaseAdmin
         .from("Product")
-        .select(`
-          id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description,
-          Category ( id, name, slug ),
-          ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
-        `)
+        .select(PRODUCT_SELECT)
         .eq("isActive", true)
         .order("createdAt", { ascending: false })
         .limit(CATALOG_LIMIT),
     ]);
-
-    let categories = catRes.data;
-    let rawProducts = prodRes.data;
-
-    // If query failed or returned empty data (transient DB hiccup), retry once after 200ms
-    if ((!categories || categories.length === 0) || (!rawProducts || rawProducts.length === 0)) {
-      await new Promise((r) => setTimeout(r, 200));
-      const [retryCat, retryProd] = await Promise.all([
-        supabaseAdmin
-          .from("Category")
-          .select("id, name, slug, description, imageUrl, sortOrder")
-          .order("sortOrder", { ascending: true }),
-        supabaseAdmin
-          .from("Product")
-          .select(`
-            id, name, slug, brand, mrp, sellingPrice, images, categoryId, subCategoryId, subCategorySlug, isActive, description,
-            Category ( id, name, slug ),
-            ProductVariant ( id, name, sku, stock, sellingPriceOverride, mrpOverride, images )
-          `)
-          .eq("isActive", true)
-          .order("createdAt", { ascending: false })
-          .limit(CATALOG_LIMIT),
-      ]);
-      if (retryCat.data && retryCat.data.length > 0) categories = retryCat.data;
-      if (retryProd.data && retryProd.data.length > 0) rawProducts = retryProd.data;
+    if (!catRes.error && !prodRes.error && catRes.data?.length && prodRes.data?.length) {
+      return { categories: catRes.data as StorefrontCategory[], rawProducts: prodRes.data };
     }
-
-    // If categories succeeded, update cache
-    if (categories && categories.length > 0) {
-      cachedCategories = categories as StorefrontCategory[];
-      lastFetchTime = Date.now();
-    }
-
-    // If products succeeded, update cache
-    if (rawProducts && rawProducts.length > 0) {
-      cachedRawProducts = rawProducts;
-      lastFetchTime = Date.now();
-    }
-  } catch (error) {
-    console.warn("[storefront-data] Supabase query error, serving from memory cache:", error);
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 200));
   }
+  throw new Error("Catalog query failed or returned no products");
+}
 
-  // Use current or cached categories and products
-  const activeCategories = cachedCategories.length > 0 ? cachedCategories : (fallbackData.categories as StorefrontCategory[]);
-  const activeRawProducts = cachedRawProducts.length > 0 ? cachedRawProducts : fallbackData.products;
+/**
+ * The catalog, shared by every server and request (Next data cache). Refreshed when an admin
+ * edit or a sale calls revalidateStorefront(); daily is only a backstop (e.g. for edits made
+ * directly in Supabase). It also caps how long pages using it stay cached, so it matches the
+ * product and category pages. This replaced a 30-second copy per server that re-read the whole
+ * catalog from Supabase many times an hour.
+ */
+const getCachedCatalogRows = unstable_cache(loadCatalogRows, ["storefront-catalog-v2"], {
+  tags: [CATALOG_TAG],
+  revalidate: 86400,
+});
 
+/** Raw catalog rows (camelCase, as stored), for the public catalog APIs. */
+export async function getCatalogRows(): Promise<CatalogRows> {
+  try {
+    const rows = await getCachedCatalogRows();
+    lastGoodCategories = rows.categories;
+    lastGoodRawProducts = rows.rawProducts;
+    return rows;
+  } catch (error) {
+    console.warn("[storefront-data] Catalog load failed, serving the last good copy:", error);
+    return { categories: lastGoodCategories, rawProducts: lastGoodRawProducts };
+  }
+}
+
+/**
+ * Categories and normalized products for the storefront pages.
+ * Never shows "Coming Soon" because of a database hiccup: falls back to the last good copy.
+ */
+export async function getStorefrontData(): Promise<{
+  categories: StorefrontCategory[];
+  subcategories: StorefrontSubCategory[];
+  allProducts: StorefrontProduct[];
+}> {
+  const { categories, rawProducts } = await getCatalogRows();
   const categorySlugMap = new Map<string, string>();
-  activeCategories.forEach((c) => categorySlugMap.set(c.id, c.slug));
-
-  const allProducts = activeRawProducts.map((p) => normalizeStoreProduct(p, categorySlugMap));
+  categories.forEach((c) => categorySlugMap.set(c.id, c.slug));
 
   return {
-    categories: activeCategories,
+    categories,
     subcategories: DEFAULT_SUBCATEGORIES,
-    allProducts,
+    allProducts: rawProducts.map((p) => normalizeStoreProduct(p, categorySlugMap)),
   };
 }
 

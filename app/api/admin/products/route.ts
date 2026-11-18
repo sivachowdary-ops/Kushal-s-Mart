@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeProduct, toProductDB, toVariantDB } from "@/lib/db-normalize";
 import { verifyAdmin, verifyAdminOrStaff } from "@/lib/admin-auth";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 // CHANGED: table "products" → "Product", join "categories" → "Category",
 //          join "product_variants" → "ProductVariant", createdAt instead of created_at
@@ -74,6 +75,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: variantsError.message }, { status: 500 });
       }
     }
+
+    // New product: refresh the cached storefront (its page, category and the home page)
+    revalidateStorefront("product create");
 
     const { data: fullProduct } = await supabaseAdmin
       .from("Product")

@@ -4,8 +4,8 @@ import { syncActiveShipments } from "@/lib/tracking-sync";
 
 export const maxDuration = 60;
 
-// One run every 2 minutes per server instance is plenty; the admin pages call this on open
-const MIN_INTERVAL_MS = 2 * 60 * 1000;
+// One run every 10 minutes per server instance is plenty; the admin Orders page calls this on open
+const MIN_INTERVAL_MS = 10 * 60 * 1000;
 let lastRunAt = 0;
 
 /**

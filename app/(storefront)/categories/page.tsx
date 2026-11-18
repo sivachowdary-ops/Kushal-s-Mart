@@ -3,6 +3,10 @@ import { ChevronRight, Tag } from "lucide-react";
 import { getStorefrontData } from "@/lib/storefront-data";
 import { getCategoryImage } from "@/lib/category-logos";
 
+// Cached; refreshed by admin edits and sales (revalidateStorefront), hourly as a backstop.
+// Before, it was built once per deploy and its product counts went stale.
+export const revalidate = 3600;
+
 // Server Component — fetches real categories from Supabase at request time
 export default async function CategoriesPage() {
   const { categories: cats, subcategories, allProducts } = await getStorefrontData();

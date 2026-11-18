@@ -1,69 +1,40 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getCatalogRows } from "@/lib/storefront-data";
 
 // Public — no auth. Returns active products with their variants and category.
-// Supports ?category=slug and ?slug=product-slug filters.
+// Supports ?category=slug, ?slug=product-slug and ?q=search filters.
+// Served from the shared catalog cache (refreshed by admin edits and sales) instead of querying
+// Supabase on every CDN miss — the shop, cart, checkout and search all call this.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const categorySlug = searchParams.get("category");
   const productSlug = searchParams.get("slug");
   const searchQuery = searchParams.get("q") || searchParams.get("search");
 
-  let query = supabaseAdmin
-    .from("Product")
-    .select(`
-      id, name, slug, description, brand, mrp, sellingPrice, costPrice,
-      images, isActive, createdAt, categoryId,
-      Category ( id, name, slug ),
-      ProductVariant ( id, name, sku, stock, lowStockThreshold, sellingPriceOverride, mrpOverride, images )
-    `)
-    .eq("isActive", true)
-    .order("createdAt", { ascending: false });
+  const { categories, rawProducts } = await getCatalogRows();
+  let rows = rawProducts;
 
   if (productSlug) {
-    query = query.eq("slug", productSlug);
+    rows = rows.filter((p) => p.slug === productSlug);
   }
 
   if (searchQuery) {
-    // Sanitize search input: strip PostgREST-special characters to prevent filter injection,
-    // and the ilike wildcards (% * _) so a search for "%" doesn't match every product
-    const sanitized = searchQuery.trim().replace(/[.,()"'\\;%*_]/g, "").slice(0, 100);
+    // Same cleanup as before: ignore punctuation and wildcard characters; nothing left = no matches
+    const sanitized = searchQuery.trim().replace(/[.,()"'\\;%*_]/g, "").slice(0, 100).toLowerCase();
     if (sanitized.length === 0) {
-      // Nothing searchable left (e.g. a search for "%") — no matches rather than the whole catalogue
       return NextResponse.json({ products: [] });
     }
-    query = query.or(`name.ilike.%${sanitized}%,brand.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+    rows = rows.filter((p) =>
+      [p.name, p.brand, p.description].some((field) => typeof field === "string" && field.toLowerCase().includes(sanitized))
+    );
   }
 
   if (categorySlug) {
-    // Join via category slug
-    const { data: cat } = await supabaseAdmin
-      .from("Category")
-      .select("id")
-      .eq("slug", categorySlug)
-      .single();
-    if (cat) {
-      query = query.eq("categoryId", cat.id);
-    }
+    const cat = categories.find((c) => c.slug === categorySlug);
+    if (cat) rows = rows.filter((p) => p.categoryId === cat.id);
   }
 
-  const { data, error } = await query;
-  if (error || !data || data.length === 0) {
-    const { allProducts } = await import("@/lib/storefront-data").then(m => m.getStorefrontData());
-    let filtered = allProducts;
-    if (productSlug) filtered = filtered.filter(p => p.slug === productSlug);
-    if (categorySlug) filtered = filtered.filter(p => p.category_slug === categorySlug);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(p => p.name.toLowerCase().includes(q) || (p.brand || "").toLowerCase().includes(q));
-    }
-    if (productSlug) {
-      return NextResponse.json({ product: filtered[0] || null });
-    }
-    return NextResponse.json({ products: filtered });
-  }
-
-  const products = (data || []).map((p) => {
+  const products = rows.map((p) => {
     const variants = ((p.ProductVariant || []) as Record<string, unknown>[]).map((v) => ({
       id: v.id,
       name: v.name,
@@ -81,9 +52,8 @@ export async function GET(request: Request) {
       ? (catRaw[0] as Record<string, unknown> | undefined) ?? null
       : (catRaw as Record<string, unknown> | null);
 
-    // Effective price = first variant override if all variants share the same price, else parent
-    const effectivePrice = (p.sellingPrice as number);
-    const effectiveMrp = (p.mrp as number);
+    const effectivePrice = p.sellingPrice as number;
+    const effectiveMrp = p.mrp as number;
 
     return {
       id: p.id,
@@ -110,12 +80,10 @@ export async function GET(request: Request) {
     };
   });
 
+  // Short CDN cache on top of the shared catalog cache; misses are cheap now (no database query)
+  const headers = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
   if (productSlug) {
-    return NextResponse.json({ product: products[0] || null }, {
-      headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" },
-    });
+    return NextResponse.json({ product: products[0] || null }, { headers });
   }
-  return NextResponse.json({ products }, {
-    headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" },
-  });
+  return NextResponse.json({ products }, { headers });
 }

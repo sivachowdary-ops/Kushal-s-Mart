@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 export const maxDuration = 60;
 
@@ -127,6 +128,7 @@ export async function POST(request: NextRequest) {
     }
 
     const remainingCount = pendingProducts.length - batch.length;
+    if (totalUploaded > 0) revalidateStorefront("image migration");
 
     return NextResponse.json({
       success: true,

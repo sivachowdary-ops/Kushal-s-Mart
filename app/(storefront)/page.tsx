@@ -6,8 +6,9 @@ import { ProductCard } from "@/components/storefront/product-card";
 import { getStorefrontData } from "@/lib/storefront-data";
 import { getCategoryImage } from "@/lib/category-logos";
 
-// Revalidate homepage every 30 seconds so admin price changes appear promptly
-export const revalidate = 30;
+// Cached; admin edits and sales refresh it at once (revalidateStorefront). Hourly is only a backstop —
+// the old 30-second timer rebuilt this page up to 2,880 times a day.
+export const revalidate = 3600;
 
 // Dedicated Track Order Section for the homepage
 function TrackOrderSection() {

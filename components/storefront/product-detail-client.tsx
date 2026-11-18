@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { cloudinarySized } from "@/lib/image-url";
 import { useCart, MAX_QTY_PER_ITEM } from "@/lib/cart-context";
 import { ColorSwatchSelector } from "@/components/storefront/color-swatch-selector";
 
@@ -315,10 +316,12 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
                         : "border-gray-200 hover:border-gray-400 opacity-70 hover:opacity-100"
                     }`}
                   >
+                    {/* Small copy (thumbnails show at 64–80 px), loaded only when scrolled into view —
+                        these used to download every full-size image on page load */}
                     <img
-                      src={img}
+                      src={cloudinarySized(img, 200)}
                       alt=""
-                      loading="eager"
+                      loading="lazy"
                       decoding="async"
                       className="h-full w-full object-contain"
                     />

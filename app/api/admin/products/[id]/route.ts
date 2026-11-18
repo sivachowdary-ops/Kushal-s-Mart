@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { normalizeProduct, toProductDB, toVariantDB } from "@/lib/db-normalize";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { revalidateStorefront } from "@/lib/revalidate-storefront";
 
 /**
  * Adds `delta` to a variant's stock without losing concurrent sales: the write only succeeds if
@@ -161,6 +162,9 @@ export async function PUT(
       }
     }
 
+    // All writes done: the cached product, category and home pages refresh on their next visit
+    revalidateStorefront("product update");
+
     const { data: fullProduct } = await supabaseAdmin
       .from("Product")
       .select(`*, Category ( id, name ), ProductVariant ( * )`)
@@ -169,6 +173,8 @@ export async function PUT(
 
     return NextResponse.json(normalizeProduct(fullProduct));
   } catch (err: unknown) {
+    // Part of the save may have gone through, so refresh anyway
+    revalidateStorefront("failed product update");
     const msg = err instanceof Error ? err.message : "Failed to update product";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -205,6 +211,8 @@ export async function DELETE(
   const { error: variantErr } = await supabaseAdmin.from("ProductVariant").delete().eq("productId", id);
   if (variantErr) return NextResponse.json({ error: variantErr.message }, { status: 500 });
   const { error } = await supabaseAdmin.from("Product").delete().eq("id", id);
+  // Variants may already be gone even if the product delete failed
+  revalidateStorefront("product delete");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });

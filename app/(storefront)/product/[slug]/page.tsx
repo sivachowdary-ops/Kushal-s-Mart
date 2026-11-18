@@ -3,8 +3,15 @@ import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/storefront-data";
 import { ProductDetailClient } from "@/components/storefront/product-detail-client";
 
-// Revalidate product pages every 30s so admin updates reflect promptly
-export const revalidate = 30;
+// Cached per product (ISR); admin edits and sales refresh it at once (revalidateStorefront).
+// Daily is only a backstop. Without generateStaticParams below, this page rendered on every visit.
+export const revalidate = 86400;
+
+// No pages are built ahead of time; each product is rendered on its first visit, then cached.
+// Next only caches a dynamic route like this when this function exists.
+export function generateStaticParams() {
+  return [];
+}
 
 // Per-product title, description and share image (was the generic site title on every product)
 export async function generateMetadata({

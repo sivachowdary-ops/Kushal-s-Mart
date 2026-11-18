@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { cloudinarySized } from "@/lib/image-url";
 
 import { useCart } from "@/lib/cart-context";
 import { ColorSwatchSelector, SwatchVariant } from "@/components/storefront/color-swatch-selector";
@@ -94,10 +95,11 @@ export function ProductCard({
         </div>
 
         {/* Product Image Area */}
-        <Link href={`/product/${slug}`} prefetch={true} className="block relative overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
+        {/* No prefetch: a grid of cards prefetched every product page it showed (up to 132 on /shop) */}
+        <Link href={`/product/${slug}`} prefetch={false} className="block relative overflow-hidden py-2 sm:py-4 text-center rounded-xl bg-gray-50/50 group-hover:bg-red-50/20 transition-colors duration-300">
           {displayImage ? (
             <img
-              src={displayImage}
+              src={cloudinarySized(displayImage, 480)}
               alt={name}
               className={`mx-auto h-28 sm:h-44 w-full object-contain transition-transform duration-500 ease-out group-hover:scale-110 ${isSoldOut ? "opacity-50 grayscale" : ""}`}
               loading="lazy"

@@ -41,6 +41,26 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export default function SettingsPage() {
   const [dbStatus, setDbStatus] = useState<"checking" | "connected" | "error">("checking");
 
+  // "Refresh website now" — for changes made directly in Supabase
+  const [isRefreshingSite, setIsRefreshingSite] = useState(false);
+  const [siteRefreshMsg, setSiteRefreshMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleRefreshWebsite = async () => {
+    setIsRefreshingSite(true);
+    setSiteRefreshMsg(null);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/revalidate", { method: "POST", headers });
+      setSiteRefreshMsg(res.ok
+        ? { type: "success", text: "✓ Done. Every page will show the latest data on its next visit." }
+        : { type: "error", text: "Couldn't refresh the website. Please log in again and retry." });
+    } catch {
+      setSiteRefreshMsg({ type: "error", text: "Couldn't reach the server. Check your connection and retry." });
+    } finally {
+      setIsRefreshingSite(false);
+    }
+  };
+
   // Admin Password Change State
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [newAdminPassword, setNewAdminPassword] = useState<string>("");
@@ -240,6 +260,42 @@ export default function SettingsPage() {
         <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
           Manage store settings, POS cashier credentials, and system status.
         </p>
+      </div>
+
+      {/* Refresh website — only needed after changes made directly in Supabase */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h2 className="text-xl font-black flex items-center gap-2 text-slate-900">
+              <RefreshCw className="h-5 w-5 text-red-600" />
+              Refresh website
+            </h2>
+            <p className="text-xs text-slate-500 font-medium max-w-2xl">
+              Changes saved here in the admin panel show on the website straight away. Use this only after
+              editing data directly in Supabase (Table Editor or SQL) — otherwise those changes appear within a day.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefreshWebsite}
+            disabled={isRefreshingSite}
+            className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-xs font-bold text-white hover:bg-black disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshingSite ? "animate-spin" : ""}`} />
+            {isRefreshingSite ? "Refreshing…" : "Refresh website now"}
+          </button>
+        </div>
+        {siteRefreshMsg && (
+          <p
+            className={`mt-4 rounded-xl border p-3 text-xs font-bold ${
+              siteRefreshMsg.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {siteRefreshMsg.text}
+          </p>
+        )}
       </div>
 
       {/* Admin Password & Account Security Section */}
