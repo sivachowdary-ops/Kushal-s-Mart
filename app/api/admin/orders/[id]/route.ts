@@ -133,7 +133,13 @@ export async function PUT(
       if (!address || !address.address || !address.city || !/^\d{6}$/.test(address.pincode)) {
         return badField("shipping_address");
       }
-      updateData.shippingAddress = address;
+      // Keep the customer's checkout choice (lib/delivery-options.ts); the admin is editing the address only
+      const { data: current } = await supabaseAdmin.from("Order").select("shippingAddress").eq("id", id).maybeSingle();
+      const previous = (current?.shippingAddress || {}) as Record<string, unknown>;
+      const choice = Object.fromEntries(
+        ["delivery", "pickupArea", "pickupPoint"].filter((k) => typeof previous[k] === "string").map((k) => [k, previous[k]])
+      );
+      updateData.shippingAddress = { ...address, ...choice };
     }
 
     if (Object.keys(updateData).length === 0) {

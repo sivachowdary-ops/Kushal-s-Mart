@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Package, Search, CheckCircle2, Clock, Truck, ChevronDown, ChevronUp, Smartphone, AlertCircle } from "lucide-react";
 import { isRtcCourier } from "@/lib/shipping";
+import { orderDeliveryOf } from "@/lib/delivery-options";
+import { orderCodOf } from "@/lib/cod";
 import { RtcShipmentBox } from "@/components/storefront/rtc-shipment-box";
 
 interface OrderItem {
@@ -179,10 +181,35 @@ function OrderCard({ order }: { order: TrackedOrder }) {
         )}
 
         {/* Total Row */}
-        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
-          <span className="text-xs font-bold text-gray-500">Total Paid</span>
-          <span className="font-extrabold text-base text-red-600">{formatPrice(order.total)}</span>
-        </div>
+        {(() => {
+          // COD: the advance is paid online; the rest + ₹50 is paid in cash when the parcel arrives
+          const cod = order.subtotal != null ? orderCodOf({ payment_mode: order.payment_mode, subtotal: order.subtotal }) : null;
+          if (!cod) {
+            return (
+              <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-500">Total Paid</span>
+                <span className="font-extrabold text-base text-red-600">{formatPrice(order.total)}</span>
+              </div>
+            );
+          }
+          const delivered = order.status === "DELIVERED";
+          return (
+            <div className="mt-4 pt-3 border-t border-gray-100 space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-500">Order total (incl. ₹{cod.fee / 100} COD charge)</span>
+                <span className="font-extrabold text-sm text-gray-900">{formatPrice(order.total)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-500">Paid online</span>
+                <span className="font-bold text-sm text-gray-900">{formatPrice(cod.advance)}</span>
+              </div>
+              <div className="flex justify-between items-center rounded-xl bg-amber-50 px-3 py-2">
+                <span className="text-xs font-extrabold text-amber-900">{delivered ? "Paid in cash at delivery" : "Pay in cash at delivery"}</span>
+                <span className="font-extrabold text-base text-amber-900">{formatPrice(cod.balance)}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Expand/Collapse Timeline */}
@@ -254,17 +281,30 @@ function OrderCard({ order }: { order: TrackedOrder }) {
           {/* Shipping Address */}
           {order.shipping_address && (
             <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Delivery Address</p>
-              <p className="text-xs text-gray-700 font-semibold">
-                {[
-                  order.shipping_address.address,
-                  order.shipping_address.city,
-                  order.shipping_address.state,
-                  order.shipping_address.pincode,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
+              {(() => {
+                const pickup = orderDeliveryOf(order.shipping_address);
+                const isPickup = pickup?.choice === "apsrtc_pickup";
+                return (
+                  <>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+                      {isPickup ? "APSRTC Pickup Point" : "Delivery Address"}
+                    </p>
+                    <p className="text-xs text-gray-700 font-semibold">
+                      {(isPickup
+                        ? [pickup.pickupPoint, order.shipping_address.city, order.shipping_address.state]
+                        : [
+                            order.shipping_address.address,
+                            order.shipping_address.city,
+                            order.shipping_address.state,
+                            order.shipping_address.pincode,
+                          ]
+                      )
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

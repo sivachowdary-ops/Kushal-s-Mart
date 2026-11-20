@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShieldCheck, Truck, Check, Minus, Plus, MessageCircle, Package, ArrowRight, Banknote } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { cloudinarySized } from "@/lib/image-url";
 import { useCart, MAX_QTY_PER_ITEM } from "@/lib/cart-context";
 import { ColorSwatchSelector } from "@/components/storefront/color-swatch-selector";
+import { COD_ADVANCE_PERCENT, COD_FEE, COD_MIN_ORDER } from "@/lib/cod";
 
 export interface Variant {
   id: string;
@@ -173,9 +174,9 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   const checkPincode = () => {
     if (/^(500|51[5-9]|52\d|53[0-5])\d{3}$/.test(pincode)) {
       // Hyderabad (500xxx) and Andhra Pradesh (515xxx–535xxx)
-      setDeliveryResult({ ok: true, text: "Delivery in 24–48 hours by APSRTC (Andhra Pradesh & Hyderabad). For RTC booking, call 72889 07757." });
+      setDeliveryResult({ ok: true, text: "APSRTC pickup in 24 hours, or home delivery in 4–7 days. Choose at checkout." });
     } else if (/^[1-9]\d{5}$/.test(pincode)) {
-      setDeliveryResult({ ok: true, text: "Estimated delivery in 4–7 days across India." });
+      setDeliveryResult({ ok: true, text: "Home delivery in 4–7 days across India." });
     } else {
       setDeliveryResult({ ok: false, text: "Please enter a valid 6-digit Indian PIN code." });
     }
@@ -391,6 +392,13 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
               </div>
               <p className="text-xs font-medium text-gray-500">
                 Inclusive of all taxes. Free express shipping across India.
+              </p>
+              {/* COD needs ₹1,000 of products in the order, so cheaper items show how to qualify */}
+              <p className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800">
+                <Banknote className="h-4 w-4 shrink-0" />
+                {activePrice * quantity >= COD_MIN_ORDER
+                  ? `Cash on Delivery available: pay ${COD_ADVANCE_PERCENT}% now, the rest + ₹${COD_FEE / 100} at your door`
+                  : `Cash on Delivery on orders of ₹${(COD_MIN_ORDER / 100).toLocaleString("en-IN")}+ (home delivery)`}
               </p>
             </div>
           </div>

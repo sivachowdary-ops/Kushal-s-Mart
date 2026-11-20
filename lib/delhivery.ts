@@ -7,7 +7,7 @@
  * 2. If credentials are not yet set, logs cleanly without throwing an unhandled exception.
  * 3. Every dispatch attempt (automatic or manual) is recorded in public.shipment_creation_log.
  * 4. Default package dimensions: 20cm x 20cm x 20cm, default weight: 500g (0.50 kg).
- * 5. Online orders are strictly Pre-paid — never COD.
+ * 5. Online orders are Pre-paid, or COD with the balance to collect (lib/cod.ts: advance already paid online).
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -31,7 +31,8 @@ export interface DelhiveryShipmentRequest {
     weightGrams?: number;
   }[];
   totalAmount: number; // paise
-  paymentMode?: string; // Always prepaid for online orders
+  paymentMode?: string; // "prepaid" or "cod"
+  codAmount?: number; // paise to collect at the door (COD only)
   weightGrams?: number; // Optional override
   lengthCm?: number; // Optional package dimensions (default: 20cm)
   widthCm?: number; // Optional package dimensions (default: 20cm)
@@ -167,6 +168,8 @@ export async function createDelhiveryShipment(
     "Kushals Mart Warehouse";
 
   const totalRupees = Math.max(1, Math.round(data.totalAmount / 100));
+  // COD: Delhivery collects this at the door (the advance was already paid online)
+  const isCod = data.paymentMode === "cod" && (data.codAmount || 0) > 0;
 
   // Calculate package weight: default 500g (0.50 kg) as approved
   const computedWeightGrams =
@@ -217,7 +220,7 @@ export async function createDelhiveryShipment(
           country: "India",
           phone: data.customerPhone,
           order: data.orderNumber,
-          payment_mode: "Pre-paid", // Strictly Pre-paid for online store
+          payment_mode: isCod ? "COD" : "Pre-paid",
           return_pin: "533432",
           return_city: "Prathipadu",
           return_phone: "7288907757",
@@ -227,7 +230,7 @@ export async function createDelhiveryShipment(
           products_desc: productDescription,
           order_date: new Date().toISOString().replace("T", " ").slice(0, 19),
           total_amount: totalRupees,
-          cod_amount: 0,
+          cod_amount: isCod ? Math.round((data.codAmount || 0) / 100) : 0, // rupees
           quantity: totalQty,
           weight: weightKg,
           // Standard package dimensions: defaults to 20cm x 20cm x 20cm or custom product specs

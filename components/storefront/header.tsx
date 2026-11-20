@@ -36,9 +36,9 @@ export function Header() {
             <Truck className="h-4 w-4 shrink-0 text-[#FFC21A]" />
             {/* One line on phones */}
             <span>
-              <span className="text-[#FFC21A] font-bold">24–48 hr delivery</span>
-              <span className="sm:hidden"> in AP &amp; Hyderabad by APSRTC</span>
-              <span className="hidden sm:inline"> in Andhra Pradesh &amp; Hyderabad by APSRTC</span>
+              <span className="text-[#FFC21A] font-bold">APSRTC pickup in 24 hrs</span>
+              <span className="sm:hidden"> · AP &amp; Hyderabad</span>
+              <span className="hidden sm:inline"> in Andhra Pradesh &amp; Hyderabad · Home delivery 4–7 days</span>
             </span>
           </span>
           <span className="hidden md:inline text-gray-500">·</span>

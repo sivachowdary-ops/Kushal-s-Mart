@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { orderCodOf } from "@/lib/cod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createDelhiveryShipment } from "@/lib/delhivery";
 import { normalizeOrder } from "@/lib/db-normalize";
@@ -83,6 +84,8 @@ export async function POST(
       );
     }
 
+    const cod = orderCodOf(order);
+
     // Call Delhivery Dispatch API
     const result = await createDelhiveryShipment({
       orderId: id,
@@ -103,7 +106,9 @@ export async function POST(
         unitPrice: i.unit_price,
       })),
       totalAmount: order.total,
-      paymentMode: "prepaid",
+      // COD orders: Delhivery collects the balance (rest of the products + ₹50) at the door
+      paymentMode: cod ? "cod" : "prepaid",
+      codAmount: cod?.balance,
     });
 
     if (!result.success || !result.waybill) {

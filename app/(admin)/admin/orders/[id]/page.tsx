@@ -8,6 +8,8 @@ import Link from "next/link";
 import { ArrowLeft, User, MapPin, Package, CreditCard, Truck, Calendar, Save, Printer, RotateCcw, Bus } from "lucide-react";
 import { deliveryMethodOf, isRtcCourier, rtcCourierName, rtcNumberOf, RTC_PORTAL_URL, type DeliveryMethod } from "@/lib/shipping";
 import { orderStatusLabel } from "@/lib/admin-ui";
+import { DELIVERY_CHOICES, orderDeliveryLabel, orderDeliveryOf } from "@/lib/delivery-options";
+import { COD_ADVANCE_PERCENT, orderCodOf } from "@/lib/cod";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -50,7 +52,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       setCourierName(order.courier_name || "");
       setAwb(order.shiprocket_awb || "");
       const rtc = isRtcCourier(order.courier_name);
-      setShipMethod(deliveryMethodOf(order));
+      // Not booked yet: start from what the customer chose at checkout
+      const chosen = orderDeliveryOf(order.shipping_address)?.choice;
+      setShipMethod(deliveryMethodOf(order) ?? (chosen === "apsrtc_pickup" ? "APSRTC" : chosen === "home" ? "DELHIVERY" : null));
       setLrNumber(rtc ? order.shiprocket_awb || "" : "");
       setRtcNumber(rtcNumberOf(order.courier_name));
     }
@@ -270,6 +274,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     order.payment_status === "PARTIALLY_REFUNDED" ||
     order.status === "PAID";
   const address = order.shipping_address as Record<string, string> | string | null;
+  const customerDelivery = orderDeliveryOf(order.shipping_address);
+  // COD is collected by Delhivery at the door, so APSRTC can't carry a COD order
+  const cod = orderCodOf(order);
   // Which service already has this parcel; an APSRTC LR sits in the same field as a Delhivery AWB
   const rtcBooked = isRtcCourier(order.courier_name) && Boolean(order.shiprocket_awb);
   const delhiveryBooked = Boolean(
@@ -375,7 +382,20 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
             {/* Step 1: after calling the customer, pick the delivery service */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery method (ask the customer)</p>
+              {customerDelivery ? (
+                <div className={`flex items-start gap-2 rounded-2xl border p-3 text-sm ${
+                  customerDelivery.choice === "apsrtc_pickup" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-800"
+                }`}>
+                  {customerDelivery.choice === "apsrtc_pickup" ? <Bus className="h-4 w-4 mt-0.5 shrink-0" /> : <Truck className="h-4 w-4 mt-0.5 shrink-0" />}
+                  <p>
+                    <span className="font-black">Customer chose: {orderDeliveryLabel(customerDelivery)}</span>
+                    <span className="block text-xs font-medium opacity-80">Picked at checkout, {DELIVERY_CHOICES[customerDelivery.choice].eta}</span>
+                  </p>
+                </div>
+              ) : null}
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                {customerDelivery ? "Delivery method" : "Delivery method (ask the customer)"}
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -389,8 +409,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <button
                   type="button"
                   onClick={() => { setShipMethod("APSRTC"); setShipMsg(null); }}
-                  disabled={delhiveryBooked}
-                  title={delhiveryBooked ? "Cancel the Delhivery shipment first" : undefined}
+                  disabled={delhiveryBooked || Boolean(cod)}
+                  title={cod ? "Cash on Delivery orders go by Delhivery, which collects the cash" : delhiveryBooked ? "Cancel the Delhivery shipment first" : undefined}
                   className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-3 py-3 text-sm font-black transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     shipMethod === "APSRTC" ? "border-amber-500 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                   }`}
@@ -401,7 +421,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               {!shipMethod && (
                 <p className="text-xs text-slate-500">Not booked yet. Call the customer, then choose Delhivery or APSRTC.</p>
               )}
-              {delhiveryBooked && (
+              {cod && (
+                <p className="text-xs font-semibold text-amber-800">
+                  Cash on Delivery: book with Delhivery. The AWB tells Delhivery to collect ₹{(cod.balance / 100).toLocaleString("en-IN")} at the door.
+                </p>
+              )}
+              {delhiveryBooked && !cod && (
                 <p className="text-xs text-slate-500">Booked with Delhivery. To send it by APSRTC instead, cancel the Delhivery shipment first.</p>
               )}
             </div>
@@ -692,8 +717,25 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <div className="space-y-3 text-sm">
               <div>
                 <div className="text-slate-500 text-xs">Payment Mode</div>
-                <div className="font-medium text-slate-900">{order.payment_mode || "N/A"}</div>
+                <div className="font-medium text-slate-900">{cod ? "Cash on Delivery (advance paid online)" : order.payment_mode || "N/A"}</div>
               </div>
+              {cod && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 space-y-1.5">
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Products</span><span>₹{(order.subtotal / 100).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>COD charge</span><span>₹{(cod.fee / 100).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Paid online ({COD_ADVANCE_PERCENT}%)</span><span>₹{(cod.advance / 100).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-amber-200 pt-1.5 text-sm font-black text-amber-900">
+                    <span>{order.status === "DELIVERED" ? "Collected at delivery" : "Collect at delivery"}</span>
+                    <span>₹{(cod.balance / 100).toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="text-slate-500 text-xs">Payment Status</div>
                 <div className="mt-1">
@@ -798,10 +840,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-slate-400" />
-                Shipping Address
+                {customerDelivery?.choice === "apsrtc_pickup" ? "APSRTC Pickup Point" : "Shipping Address"}
               </h2>
               <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                {typeof address === "string"
+                {customerDelivery?.choice === "apsrtc_pickup" && typeof address !== "string"
+                  ? [customerDelivery.pickupPoint, [address?.city, address?.state].filter(Boolean).join(", "), "No street address: the customer collects from APSRTC"].filter(Boolean).join("\n")
+                  : typeof address === "string"
                   ? address
                   : [
                       address.address,

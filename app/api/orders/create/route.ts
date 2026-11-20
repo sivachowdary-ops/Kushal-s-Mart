@@ -3,6 +3,8 @@ import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createRazorpayOrder } from "@/lib/razorpay";
 import { generateOrderNumber, isOrderNumberClash } from "@/lib/order-number";
+import { findPickupPoint, isDeliveryChoice } from "@/lib/delivery-options";
+import { COD_MIN_ORDER, codBreakdown, isCodEligible, isPaymentOption } from "@/lib/cod";
 
 interface OrderItemRecord {
   id?: string;
@@ -59,7 +61,7 @@ function badRequest(error: string) {
  * POST /api/orders/create
  *
  * Creates an Order with status PENDING_PAYMENT for the Razorpay checkout flow.
- * Online payment only — no COD.
+ * Pay in full online, or COD for home delivery: 25% of the products online now (lib/cod.ts).
  *
  * Stock is NOT decremented here — that happens in the webhook handler
  * after Razorpay confirms payment. Stock IS validated here to prevent
@@ -94,12 +96,19 @@ export async function POST(request: Request) {
     const customerPhone = normalizePhone(body.customer_phone);
     const customerEmail = cleanText(body.customer_email, 200) || null;
     const rawAddress = (body.shipping_address || {}) as Record<string, unknown>;
-    const shippingAddress = {
-      address: cleanText(rawAddress.address, 500),
-      city: cleanText(rawAddress.city, 100),
-      state: cleanText(rawAddress.state, 100),
-      pincode: typeof rawAddress.pincode === "string" ? rawAddress.pincode.replace(/\D/g, "") : "",
-    };
+    const deliveryChoice = body.delivery_choice;
+    const pickup = deliveryChoice === "apsrtc_pickup" ? findPickupPoint(cleanText(body.pickup_point, 100)) : null;
+    // The customer's delivery choice travels inside shippingAddress (see lib/delivery-options.ts).
+    // A pickup order has no street address: the parcel waits at the APSRTC point.
+    const shippingAddress = pickup
+      ? { address: "", city: pickup.area, state: pickup.state, pincode: "", delivery: "apsrtc_pickup", pickupArea: pickup.area, pickupPoint: pickup.point }
+      : {
+          address: cleanText(rawAddress.address, 500),
+          city: cleanText(rawAddress.city, 100),
+          state: cleanText(rawAddress.state, 100),
+          pincode: typeof rawAddress.pincode === "string" ? rawAddress.pincode.replace(/\D/g, "") : "",
+          delivery: "home",
+        };
 
     if (!Array.isArray(items) || items.length === 0) return badRequest("Cart is empty");
     if (items.length > MAX_CART_LINES) return badRequest("Too many items in cart");
@@ -108,7 +117,13 @@ export async function POST(request: Request) {
     if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       return badRequest("Please enter a valid email address");
     }
-    if (!shippingAddress.address || !shippingAddress.city || !/^\d{6}$/.test(shippingAddress.pincode)) {
+    if (!isDeliveryChoice(deliveryChoice)) {
+      return badRequest("Please choose home delivery or APSRTC pickup (refresh the page if you don't see the choice)");
+    }
+    if (deliveryChoice === "apsrtc_pickup" && !pickup) {
+      return badRequest("Please choose an APSRTC pickup point");
+    }
+    if (!pickup && (!shippingAddress.address || !shippingAddress.city || !/^\d{6}$/.test(shippingAddress.pincode))) {
       return badRequest("Complete shipping address with a valid 6-digit PIN code is required");
     }
 
@@ -201,6 +216,21 @@ export async function POST(request: Request) {
     // Razorpay minimum is ₹1 (100 paise)
     if (subtotal < 100) return badRequest("Order total is too low");
 
+    // ── Payment option: full online, or COD with a 25% advance (lib/cod.ts) ─
+    // Older pages don't send it: treat that as paying in full
+    const paymentOption = body.payment_option ?? "full";
+    if (!isPaymentOption(paymentOption)) return badRequest("Invalid payment option");
+    if (paymentOption === "cod" && !isCodEligible(subtotal, deliveryChoice)) {
+      return badRequest(
+        deliveryChoice === "home"
+          ? `Cash on Delivery is for orders of ₹${(COD_MIN_ORDER / 100).toLocaleString("en-IN")} or more`
+          : "Cash on Delivery is only for home delivery, not APSRTC pickup"
+      );
+    }
+    const cod = paymentOption === "cod" ? codBreakdown(subtotal) : null;
+    const orderTotal = cod ? cod.total : subtotal;
+    const payNow = cod ? cod.advance : subtotal; // what Razorpay charges now
+
     const now = new Date().toISOString();
     const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -224,9 +254,9 @@ export async function POST(request: Request) {
           shippingAddress,
           subtotal,
           discount: 0,
-          total: subtotal,
+          total: orderTotal,
           paymentStatus: "PENDING",
-          paymentMode: "prepaid",
+          paymentMode: cod ? "cod" : "prepaid",
           updatedAt: now,
         }])
         .select()
@@ -268,7 +298,7 @@ export async function POST(request: Request) {
 
     try {
       const rzpOrder = await createRazorpayOrder({
-        amountPaise: subtotal,
+        amountPaise: payNow,
         receipt: orderNumber,
         notes: {
           order_id: order.id,
@@ -291,7 +321,7 @@ export async function POST(request: Request) {
           order_id: order.id,
           razorpay_order_id: rzpOrder.id,
           razorpay_payment_id: null,
-          amount: subtotal,
+          amount: payNow,
           currency: "INR",
           status: "created",
         }]);
@@ -308,7 +338,9 @@ export async function POST(request: Request) {
         order_number: orderNumber,
         order_id: order.id,
         razorpay_order_id: razorpayOrderId,
-        amount: subtotal,
+        amount: payNow,
+        order_total: orderTotal,
+        cod_balance: cod ? cod.balance : 0,
         currency: "INR",
         key_id: keyId,
       },

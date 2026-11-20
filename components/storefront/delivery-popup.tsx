@@ -8,7 +8,7 @@ import { useDiwaliOffer } from "@/lib/use-diwali-offer";
 // Once per visit: sessionStorage clears when the visitor closes the site, so it shows again next time
 const STORAGE_KEY = "km_apsrtc_popup_seen";
 
-/** Once-per-visit announcement: 24–48 hour APSRTC delivery in Andhra Pradesh & Hyderabad. */
+/** Once-per-visit announcement: 24-hour APSRTC pickup in Andhra Pradesh & Hyderabad, home delivery 4–7 days. */
 export function DeliveryPopup() {
   const offerActive = useDiwaliOffer();
   const [open, setOpen] = useState(false);
@@ -59,25 +59,26 @@ export function DeliveryPopup() {
             <X className="h-5 w-5" />
           </button>
           <span className="inline-block rounded-full bg-[#FFC21A] px-3 py-1 text-[11px] font-extrabold tracking-[0.12em] text-[#111625]">
-            NOW DELIVERING FASTER
+            PICK UP IN 24 HOURS
           </span>
           <div className="mt-3 flex items-end gap-2 font-display">
-            <span className="text-7xl font-extrabold leading-[0.85] tracking-tighter text-[#FFC21A]">24–48</span>
+            <span className="text-7xl font-extrabold leading-[0.85] tracking-tighter text-[#FFC21A]">24</span>
             <span className="pb-1 text-2xl font-extrabold">hours</span>
           </div>
           <h2 id="apsrtc-popup-title" className="mt-3 font-display text-2xl font-bold leading-tight">
-            Delivery in Andhra Pradesh &amp; Hyderabad by APSRTC
+            APSRTC pickup in Andhra Pradesh &amp; Hyderabad
           </h2>
         </div>
         <div className="space-y-3 px-7 pt-6 pb-7">
           <div className="flex items-center justify-between gap-3 rounded-2xl border-2 border-red-200 bg-red-50 px-4 py-3">
-            <span className="text-sm font-bold text-gray-900">Andhra Pradesh &amp; Hyderabad</span>
-            <span className="whitespace-nowrap text-sm font-extrabold text-red-700">24–48 hours</span>
+            <span className="text-sm font-bold text-gray-900">APSRTC pickup (AP &amp; Hyderabad)</span>
+            <span className="whitespace-nowrap text-sm font-extrabold text-red-700">24 hours</span>
           </div>
-          <div className="flex items-center justify-between rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-3">
-            <span className="text-sm font-bold text-gray-900">Rest of India</span>
-            <span className="text-sm font-extrabold text-gray-600">4–7 days</span>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-3">
+            <span className="text-sm font-bold text-gray-900">Home delivery (all India)</span>
+            <span className="whitespace-nowrap text-sm font-extrabold text-gray-600">4–7 days</span>
           </div>
+          <p className="text-xs font-semibold text-gray-500">Choose pickup or home delivery at checkout.</p>
           <a
             href="tel:+917288907757"
             className="flex min-h-[48px] items-center justify-between rounded-2xl border-2 border-[#FFC21A] bg-[#FFF8E1] px-4 py-3 hover:bg-[#FFF1C2] transition-colors"

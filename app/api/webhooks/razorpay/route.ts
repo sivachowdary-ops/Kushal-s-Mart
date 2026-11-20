@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { onlineAmountOf } from "@/lib/cod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
 import { revalidateStorefront } from "@/lib/revalidate-storefront";
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
         })
         .eq("id", internalOrderId)
         .in("status", PAYABLE_STATUSES)
-        .select("id, orderNumber, total");
+        .select("id, orderNumber, subtotal, total, paymentMode");
 
       if (claimErr) throw new Error(`Order claim failed: ${claimErr.message}`);
 
@@ -104,10 +105,12 @@ export async function POST(request: Request) {
       }
 
       const paidOrder = claimed[0];
-      if (typeof paymentEntity.amount === "number" && paymentEntity.amount !== paidOrder.total) {
+      // A COD order is paid online only up to its advance (lib/cod.ts); "PAID" then means the advance is in
+      const expectedAmount = onlineAmountOf(paidOrder);
+      if (typeof paymentEntity.amount === "number" && paymentEntity.amount !== expectedAmount) {
         console.error(
           `[Razorpay Webhook] ⚠️ Amount mismatch for ${paidOrder.orderNumber}: ` +
-          `paid ${paymentEntity.amount}, order total ${paidOrder.total} — review before shipping`
+          `paid ${paymentEntity.amount}, expected ${expectedAmount} — review before shipping`
         );
       }
 

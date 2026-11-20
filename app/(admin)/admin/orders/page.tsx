@@ -8,6 +8,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ShoppingBag, Eye, Store, Globe, AlertCircle, Printer, Bus, Truck } from "lucide-react";
 import { deliveryMethodOf } from "@/lib/shipping";
+import { orderDeliveryLabel, orderDeliveryOf } from "@/lib/delivery-options";
+import { orderCodOf } from "@/lib/cod";
 import type { AdminOrder } from "@/lib/admin-store";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { ALL_DATES, describeDateRange, isInDateRange, resolveDateRange, type DateFilter } from "@/lib/date-range";
@@ -34,13 +36,25 @@ const MORE_STATUSES = [
   { value: "PAYMENT_FAILED", label: "✕ Failed payment attempts" },
 ];
 
-/** Delhivery / APSRTC badge, so it's clear at a glance how each order travels */
+/**
+ * Delhivery / APSRTC badge, so it's clear at a glance how each order travels.
+ * Before it's booked, shows what the customer chose at checkout instead.
+ */
 function MethodBadge({ order }: { order: AdminOrder }) {
   const method = deliveryMethodOf(order);
+  const chosen = orderDeliveryOf(order.shipping_address);
   if (method === "APSRTC") {
     return (
       <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-        <Bus className="h-3 w-3" /> APSRTC
+        <Bus className="h-3 w-3" /> APSRTC{chosen?.pickupPoint ? ` · ${chosen.pickupPoint}` : ""}
+      </span>
+    );
+  }
+  if (!method && chosen) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold border border-dashed border-slate-400 bg-white text-slate-700">
+        {chosen.choice === "apsrtc_pickup" ? <Bus className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+        Wants {orderDeliveryLabel(chosen).replace(/^./, (c) => c.toLowerCase())}
       </span>
     );
   }
@@ -52,6 +66,18 @@ function MethodBadge({ order }: { order: AdminOrder }) {
     );
   }
   return null;
+}
+
+/** Cash on Delivery orders: how much Delhivery still has to collect at the door */
+function CodBadge({ order }: { order: AdminOrder }) {
+  const cod = orderCodOf(order);
+  if (!cod) return null;
+  const collected = ["DELIVERED", "COMPLETED"].includes(order.status);
+  return (
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-300">
+      COD · ₹{(cod.balance / 100).toLocaleString("en-IN")} {collected ? "collected" : "to collect"}
+    </span>
+  );
 }
 
 /** APSRTC parcels have no automatic tracking, so they get a one-tap "Delivered" right in the list */
@@ -121,7 +147,13 @@ function OrdersList() {
 
     const matchesChannel = channelFilter === "ALL" || o.channel === channelFilter;
     const method = deliveryMethodOf(o);
-    const matchesMethod = methodFilter === "ALL" || (methodFilter === "NONE" ? method === null : method === methodFilter);
+    const chosen = orderDeliveryOf(o.shipping_address)?.choice;
+    const matchesMethod =
+      methodFilter === "ALL" ||
+      (methodFilter === "NONE" ? method === null :
+        methodFilter === "WANTS_PICKUP" ? chosen === "apsrtc_pickup" :
+        methodFilter === "WANTS_HOME" ? chosen === "home" :
+        method === methodFilter);
     return matchesSearch && matchesStatus && matchesChannel && matchesMethod;
   });
   const filtersActive =
@@ -182,6 +214,8 @@ function OrdersList() {
             <option value="DELHIVERY">Delhivery</option>
             <option value="APSRTC">APSRTC</option>
             <option value="NONE">Not booked yet</option>
+            <option value="WANTS_PICKUP">Customer chose APSRTC pickup</option>
+            <option value="WANTS_HOME">Customer chose home delivery</option>
           </select>
           </div>
         </div>
@@ -275,6 +309,7 @@ function OrdersList() {
                       {orderStatusLabel(order.status)}
                     </span>
                     <MethodBadge order={order} />
+                    <CodBadge order={order} />
                     {needsDispatch(order) && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                         Needs dispatch
@@ -352,6 +387,7 @@ function OrdersList() {
                           {orderStatusLabel(order.status)}
                         </span>
                         <MethodBadge order={order} />
+                        <CodBadge order={order} />
                         {needsDispatch(order) && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
                             NEEDS DISPATCH

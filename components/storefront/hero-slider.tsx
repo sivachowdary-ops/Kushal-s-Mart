@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
-import { Bus, Pause, Phone, Play, Truck } from "lucide-react";
+import { Banknote, Bus, Pause, Phone, Play, Truck, Wallet } from "lucide-react";
 import { useDiwaliOffer } from "@/lib/use-diwali-offer";
+import { COD_ADVANCE_PERCENT, COD_FEE, COD_MIN_ORDER } from "@/lib/cod";
 
 type Theme = "light" | "dark"; // text colour on the coloured box
 
@@ -104,7 +105,8 @@ const DIWALI_SLIDE: ProductSlide = {
   sticker: { big: "10% off", small: "when you pay", className: "bg-[#FFC21A] text-[#111625] -rotate-3" },
 };
 
-const DELIVERY_TAB = { label: "Delivery", hint: "24–48 hrs in AP & Hyd" };
+const DELIVERY_TAB = { label: "Delivery", hint: "APSRTC pickup in 24 hrs" };
+const COD_TAB = { label: "COD", hint: `Cash on Delivery, ₹${(COD_MIN_ORDER / 100).toLocaleString("en-IN")}+` };
 
 const TEXT = {
   light: { kicker: "text-white/75", body: "text-white/80", heading: "text-white", ghost: "border-white/45 text-white hover:bg-white/10" },
@@ -204,6 +206,64 @@ function ProductPoster({ slide, priority }: { slide: ProductSlide; priority: boo
   );
 }
 
+/** Cash on Delivery: home delivery orders of ₹1,000+, 25% online now and the rest at the door (lib/cod.ts) */
+function CodPoster() {
+  return (
+    <PosterFrame
+      field="bg-[#0B5D3B]"
+      theme="light"
+      copy={
+        <>
+          <p className="flex items-center gap-2 text-sm font-bold text-[#FFC21A] sm:text-base">
+            <Banknote className="h-5 w-5" /> Cash on Delivery on orders of ₹{(COD_MIN_ORDER / 100).toLocaleString("en-IN")}+
+          </p>
+          <h2 className="text-white">
+            <span className="font-display flex items-end gap-3">
+              <span className="whitespace-nowrap text-[76px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A] sm:text-[120px] lg:text-[96px] xl:text-[124px]">{COD_ADVANCE_PERCENT}%</span>
+              <span className="pb-1 text-3xl font-extrabold sm:text-5xl lg:text-4xl xl:text-5xl">now</span>
+            </span>
+            <span className="font-display mt-3 block text-xl font-bold leading-tight sm:text-3xl xl:text-4xl">
+              and the rest in cash at your door.
+            </span>
+          </h2>
+          <p className="hidden max-w-[460px] text-lg font-semibold leading-relaxed text-white/80 sm:block">
+            Home delivery only. A ₹{COD_FEE / 100} COD charge is added to what you pay at the door.
+          </p>
+        </>
+      }
+      actions={
+        <>
+          <Link href="/shop" className={`${CTA_BASE} flex-1 bg-[#FFC21A] text-[#111625] shadow-lg hover:bg-yellow-300 sm:flex-none`}>
+            Start shopping
+          </Link>
+          <Link href="/category/rc-cars" className={`${CTA_BASE} border-2 border-white/45 font-bold text-white hover:bg-white/10`}>
+            Shop RC cars
+          </Link>
+        </>
+      }
+      window={
+        <div className="flex w-full flex-col gap-2.5 p-4 sm:gap-4 sm:p-8 lg:p-10">
+          <div className="flex items-center gap-3 rounded-2xl border-[3px] border-[#0B5D3B] bg-white p-3 sm:gap-4 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0B5D3B] text-white sm:h-14 sm:w-14 sm:rounded-2xl"><Wallet className="h-6 w-6 sm:h-7 sm:w-7" /></div>
+            <div>
+              <p className="text-xs font-bold text-[#0B5D3B] sm:text-sm">Pay online now</p>
+              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">{COD_ADVANCE_PERCENT}% of the products</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-2xl border-[3px] border-[#E0DCD3] bg-white p-3 sm:gap-4 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#111625] text-[#FFC21A] sm:h-14 sm:w-14 sm:rounded-2xl"><Banknote className="h-6 w-6 sm:h-7 sm:w-7" /></div>
+            <div>
+              <p className="text-xs font-bold text-gray-600 sm:text-sm">Pay in cash at your door</p>
+              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">The rest + ₹{COD_FEE / 100}</p>
+            </div>
+          </div>
+          <p className="hidden text-sm font-bold text-[#3B4152] sm:block">Prefer to pay in full online? No COD charge. APSRTC pickup is prepaid.</p>
+        </div>
+      }
+    />
+  );
+}
+
 function DeliveryPoster() {
   return (
     <PosterFrame
@@ -212,15 +272,15 @@ function DeliveryPoster() {
       copy={
         <>
           <p className="flex items-center gap-2 text-sm font-bold text-[#FFC21A] sm:text-base">
-            <Bus className="h-5 w-5" /> Fast delivery by APSRTC
+            <Bus className="h-5 w-5" /> Collect from APSRTC
           </p>
           <h2 className="text-white">
             <span className="font-display flex items-end gap-3">
-              <span className="whitespace-nowrap text-[76px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A] sm:text-[120px] lg:text-[96px] xl:text-[124px]">24–48</span>
+              <span className="whitespace-nowrap text-[76px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A] sm:text-[120px] lg:text-[96px] xl:text-[124px]">24</span>
               <span className="pb-1 text-3xl font-extrabold sm:text-5xl lg:text-4xl xl:text-5xl">hours</span>
             </span>
             <span className="font-display mt-3 block text-xl font-bold leading-tight sm:text-3xl xl:text-4xl">
-              to your door in Andhra Pradesh &amp; Hyderabad.
+              to pick up at an APSRTC point in Andhra Pradesh &amp; Hyderabad.
             </span>
           </h2>
           <a href="tel:+917288907757" className="inline-flex items-center gap-2 text-sm font-bold text-white/85 hover:text-white sm:text-base">
@@ -243,17 +303,17 @@ function DeliveryPoster() {
           <div className="flex items-center gap-3 rounded-2xl border-[3px] border-[#D3150F] bg-white p-3 sm:gap-4 sm:p-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#D3150F] text-white sm:h-14 sm:w-14 sm:rounded-2xl"><Bus className="h-6 w-6 sm:h-7 sm:w-7" /></div>
             <div>
-              <p className="text-xs font-bold text-red-700 sm:text-sm">Andhra Pradesh &amp; Hyderabad</p>
-              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">24–48 hours</p>
-              <p className="hidden text-sm font-semibold text-gray-600 sm:block">Delivered by APSRTC</p>
+              <p className="text-xs font-bold text-red-700 sm:text-sm">APSRTC pickup, AP &amp; Hyderabad</p>
+              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">24 hours</p>
+              <p className="hidden text-sm font-semibold text-gray-600 sm:block">Collect from an APSRTC point</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border-[3px] border-[#E0DCD3] bg-white p-3 sm:gap-4 sm:p-5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#111625] text-[#FFC21A] sm:h-14 sm:w-14 sm:rounded-2xl"><Truck className="h-6 w-6 sm:h-7 sm:w-7" /></div>
             <div>
-              <p className="text-xs font-bold text-gray-600 sm:text-sm">Rest of India</p>
+              <p className="text-xs font-bold text-gray-600 sm:text-sm">Home delivery, all India</p>
               <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">4–7 days</p>
-              <p className="hidden text-sm font-semibold text-gray-600 sm:block">Delivered by Delhivery</p>
+              <p className="hidden text-sm font-semibold text-gray-600 sm:block">Delivered to your address</p>
             </div>
           </div>
           <p className="hidden text-sm font-bold text-[#3B4152] sm:block">Free shipping on every order, with live tracking by phone number.</p>
@@ -272,7 +332,7 @@ export function HeroSlider({ offerActive = false }: { offerActive?: boolean }) {
 
 /** The product posters plus the APSRTC delivery poster, with a labelled tab strip. */
 function Carousel({ slides }: { slides: ProductSlide[] }) {
-  const tabs = [...slides.map((s) => s.tab), DELIVERY_TAB];
+  const tabs = [...slides.map((s) => s.tab), DELIVERY_TAB, COD_TAB];
   const slideCount = tabs.length;
   // The previous slide stays shown under the new one while it fades in, so the page never shows through
   const [{ current: currentIndex, previous: previousIndex }, setSlide] = useState({ current: 0, previous: -1 });
@@ -342,7 +402,7 @@ function Carousel({ slides }: { slides: ProductSlide[] }) {
               inert={!active}
               className={`[grid-area:1/1] transition-opacity duration-500 motion-reduce:transition-none ${active ? "z-10 opacity-100" : idx === previousIndex ? "opacity-100" : "invisible opacity-0"}`}
             >
-              {idx < slides.length ? <ProductPoster slide={slides[idx]} priority={idx === 0} /> : <DeliveryPoster />}
+              {idx < slides.length ? <ProductPoster slide={slides[idx]} priority={idx === 0} /> : idx === slides.length ? <DeliveryPoster /> : <CodPoster />}
             </div>
           );
         })}
@@ -351,7 +411,7 @@ function Carousel({ slides }: { slides: ProductSlide[] }) {
       {/* Tab strip: names every slide, shows which one is on and how long until the next */}
       <div className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-stretch px-2 sm:px-4 lg:px-6">
-          <div className={`grid flex-1 ${slideCount > 4 ? "grid-cols-5" : "grid-cols-4"}`}>
+          <div className={`grid flex-1 ${slideCount > 5 ? "grid-cols-6" : slideCount > 4 ? "grid-cols-5" : "grid-cols-4"}`}>
             {tabs.map((tab, idx) => {
               const active = idx === currentIndex;
               return (

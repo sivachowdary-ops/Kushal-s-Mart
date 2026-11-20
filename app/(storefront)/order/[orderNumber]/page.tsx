@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Package, ArrowRight, Truck, MapPin, ShoppingBag, RotateCcw, Clock, AlertTriangle } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { loadOrderSummary } from "@/lib/order-summary";
+import { DELIVERY_CHOICES, orderDeliveryOf } from "@/lib/delivery-options";
 
 interface OrderStatus {
   status: string;
@@ -32,7 +33,8 @@ interface FullOrder {
     state?: string;
     pincode?: string;
   } | null;
-  total: number;
+  total: number; // charged online (the advance for COD)
+  codBalance?: number; // to pay at the door (COD only)
   order_items: OrderItem[];
 }
 
@@ -97,6 +99,7 @@ export default function OrderConfirmationPage({
       customer_phone: summary.customerPhone,
       shipping_address: summary.shippingAddress,
       total: summary.total,
+      codBalance: summary.codBalance,
       order_items: summary.items.map((item, idx) => ({
         id: `${orderNumber}-${idx}`,
         product_name: item.name,
@@ -246,6 +249,8 @@ export default function OrderConfirmationPage({
   const order = fullOrder;
   const items = order?.order_items || [];
   const address = order?.shipping_address || null;
+  const delivery = orderDeliveryOf(address);
+  const pickup = delivery?.choice === "apsrtc_pickup" ? delivery : null;
 
   return (
     <div className="bg-[#F4F5F7] min-h-screen py-10 sm:py-16">
@@ -279,8 +284,10 @@ export default function OrderConfirmationPage({
                 <Truck className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-300 uppercase tracking-wider">Estimated Dispatch</p>
-                <p className="text-sm font-extrabold text-white">Within 24 Hours • Express Delivery</p>
+                <p className="text-xs font-bold text-gray-300 uppercase tracking-wider">{delivery ? DELIVERY_CHOICES[delivery.choice].label : "Estimated Dispatch"}</p>
+                <p className="text-sm font-extrabold text-white">
+                  {delivery ? `Usually ${DELIVERY_CHOICES[delivery.choice].eta}` : "Within 24 Hours"}
+                </p>
               </div>
             </div>
             <Link
@@ -335,9 +342,15 @@ export default function OrderConfirmationPage({
                     <span className="text-emerald-600 font-bold">FREE</span>
                   </div>
                   <div className="border-t border-gray-200/80 pt-2 flex justify-between text-sm sm:text-base font-extrabold text-gray-900">
-                    <span>Total Paid</span>
+                    <span>{order.codBalance ? "Paid Online (Advance)" : "Total Paid"}</span>
                     <span className="text-red-600">{formatPrice(order.total)}</span>
                   </div>
+                  {order.codBalance ? (
+                    <div className="flex justify-between rounded-xl bg-amber-50 px-3 py-2 text-sm font-extrabold text-amber-900">
+                      <span>Pay in cash at delivery</span>
+                      <span>{formatPrice(order.codBalance)}</span>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -348,14 +361,19 @@ export default function OrderConfirmationPage({
             <div className="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200/60 flex items-start gap-3">
               <MapPin className="h-5 w-5 text-gray-500 shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed text-gray-700">
-                <p className="font-bold text-gray-900">Delivery Address:</p>
+                <p className="font-bold text-gray-900">{pickup ? "APSRTC Pickup Point:" : "Delivery Address:"}</p>
                 <p className="font-medium mt-0.5">
                   {order?.customer_name && <span className="font-bold text-gray-900">{order.customer_name} • </span>}
                   {order?.customer_phone && <span className="text-gray-600 font-mono">{order.customer_phone}</span>}
                 </p>
                 <p className="text-gray-600 mt-0.5">
-                  {[address.address, address.city, address.state, address.pincode].filter(Boolean).join(", ")}
+                  {pickup
+                    ? [pickup.pickupPoint, address.city, address.state].filter(Boolean).join(", ")
+                    : [address.address, address.city, address.state, address.pincode].filter(Boolean).join(", ")}
                 </p>
+                {pickup && (
+                  <p className="text-gray-600 mt-1">Ready in about {DELIVERY_CHOICES.apsrtc_pickup.eta}. We&apos;ll share the LR number to collect it.</p>
+                )}
               </div>
             </div>
           )}

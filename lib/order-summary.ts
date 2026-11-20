@@ -6,10 +6,13 @@
  */
 export interface OrderSummary {
   orderNumber: string;
-  total: number; // paise, as charged by the server
+  total: number; // paise, as charged by the server (the advance for COD)
+  orderTotal?: number; // paise, the whole order (COD: products + ₹50)
+  codBalance?: number; // paise to pay at the door (COD only)
   customerName: string;
   customerPhone: string;
-  shippingAddress: { address: string; city: string; state: string; pincode: string };
+  // delivery / pickupArea / pickupPoint: the checkout choice (lib/delivery-options.ts)
+  shippingAddress: { address: string; city: string; state: string; pincode: string; delivery?: string; pickupArea?: string; pickupPoint?: string };
   items: { name: string; variantName: string; quantity: number; price: number; image?: string }[];
 }
 

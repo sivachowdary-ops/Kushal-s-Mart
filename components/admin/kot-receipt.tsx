@@ -2,6 +2,8 @@
 
 import { formatPrice, formatDate } from "@/lib/utils";
 import { getStoreBranch } from "@/lib/stores";
+import { orderDeliveryOf } from "@/lib/delivery-options";
+import { COD_ADVANCE_PERCENT, orderCodOf } from "@/lib/cod";
 
 interface KotReceiptProps {
   paperSize?: "58mm" | "80mm";
@@ -36,6 +38,8 @@ interface KotReceiptProps {
 }
 
 export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotReceiptProps) {
+  const pickup = orderDeliveryOf(order.shippingAddress);
+  const cod = orderCodOf(order);
   const is58mm = paperSize === "58mm";
   const branch = getStoreBranch(storeBranchId || order.storeBranch);
 
@@ -83,7 +87,14 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
           <span>Phone</span>
           <span>{order.customerPhone}</span>
         </div>
-        {order.shippingAddress && (
+        {order.shippingAddress && (pickup?.choice === "apsrtc_pickup" ? (
+          <div className="mt-1">
+            <span className="font-bold block">APSRTC Pickup:</span>
+            <span className="text-[8px] sm:text-[9px] block">
+              {[pickup.pickupPoint, order.shippingAddress.city, order.shippingAddress.state].filter(Boolean).join(", ")}
+            </span>
+          </div>
+        ) : (
           <div className="mt-1">
             <span className="font-bold block">Ship To:</span>
             <span className="text-[8px] sm:text-[9px] block">{order.shippingAddress.address}</span>
@@ -91,7 +102,7 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
               {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.pincode}
             </span>
           </div>
-        )}
+        ))}
       </div>
 
       {/* Items Table Header */}
@@ -139,10 +150,28 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
           <span>Shipping</span>
           <span className="font-bold">FREE</span>
         </div>
+        {cod && (
+          <div className="flex justify-between">
+            <span>COD charge</span>
+            <span>{formatPrice(cod.fee)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-xs sm:text-sm font-black border-t border-gray-400 pt-1 mt-1">
           <span>TOTAL</span>
           <span>{formatPrice(order.total)}</span>
         </div>
+        {cod && (
+          <>
+            <div className="flex justify-between">
+              <span>Paid online ({COD_ADVANCE_PERCENT}%)</span>
+              <span>-{formatPrice(cod.advance)}</span>
+            </div>
+            <div className="flex justify-between text-xs sm:text-sm font-black border-t border-gray-400 pt-1 mt-1">
+              <span>COLLECT ON DELIVERY</span>
+              <span>{formatPrice(cod.balance)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Payment Info */}
@@ -154,7 +183,7 @@ export function KotReceipt({ order, paperSize = "58mm", storeBranchId }: KotRece
         {order.paymentMode && (
           <div className="flex justify-between">
             <span>Payment Mode</span>
-            <span className="font-bold">{order.paymentMode}</span>
+            <span className="font-bold">{cod ? `COD (${COD_ADVANCE_PERCENT}% paid online)` : order.paymentMode}</span>
           </div>
         )}
       </div>

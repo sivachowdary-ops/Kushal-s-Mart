@@ -3,11 +3,13 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShieldCheck, Lock, Truck, ArrowLeft, ShoppingBag, CreditCard, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Lock, Truck, Bus, ArrowLeft, ShoppingBag, CreditCard, AlertCircle, Zap, CheckCircle2 } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/utils";
 import { saveOrderSummary } from "@/lib/order-summary";
 import { CartNotice } from "@/components/storefront/cart-notice";
+import { DELIVERY_CHOICES, PICKUP_AREAS, findPickupPoint, type DeliveryChoice } from "@/lib/delivery-options";
+import { COD_ADVANCE_PERCENT, COD_FEE, COD_MIN_ORDER, codBreakdown, isCodEligible, type PaymentOption } from "@/lib/cod";
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -95,6 +97,17 @@ function CheckoutContent() {
     state: "Andhra Pradesh",
     pincode: "",
   });
+  // Nothing is pre-selected: customers must say whether they'll collect from APSRTC or want home delivery
+  const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice | null>(null);
+  const [pickupPoint, setPickupPoint] = useState("");
+  const isPickup = deliveryChoice === "apsrtc_pickup";
+  const pickup = isPickup ? findPickupPoint(pickupPoint) : null;
+  // Pay in full, or COD (home delivery, ₹1,000+): 25% now, the rest + ₹50 at the door (lib/cod.ts)
+  const [paymentChoice, setPaymentChoice] = useState<PaymentOption>("full");
+  const codAllowed = isCodEligible(activeSubtotal, deliveryChoice);
+  const paymentOption: PaymentOption = codAllowed ? paymentChoice : "full";
+  const cod = paymentOption === "cod" ? codBreakdown(activeSubtotal) : null;
+  const payNow = cod ? cod.advance : activeSubtotal;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -132,15 +145,27 @@ function CheckoutContent() {
     setPaymentFailedInfo(null);
 
     // Validation
-    if (!formData.customerName || !formData.customerPhone || !formData.address || !formData.city || !formData.pincode) {
-      setErrorMessage("Please fill in all required shipping fields.");
+    if (!formData.customerName || !formData.customerPhone) {
+      setErrorMessage("Please enter your name and mobile number.");
       return;
     }
     if (formData.customerPhone.replace(/\D/g, "").length !== 10) {
       setErrorMessage("Please enter a valid 10-digit mobile number.");
       return;
     }
-    if (formData.pincode.replace(/\D/g, "").length !== 6) {
+    if (!deliveryChoice) {
+      setErrorMessage("Please choose home delivery or APSRTC pickup.");
+      return;
+    }
+    if (isPickup && !pickup) {
+      setErrorMessage("Please choose the APSRTC point where you'll collect your parcel.");
+      return;
+    }
+    if (!isPickup && (!formData.address || !formData.city || !formData.pincode)) {
+      setErrorMessage("Please fill in your delivery address.");
+      return;
+    }
+    if (!isPickup && formData.pincode.replace(/\D/g, "").length !== 6) {
       setErrorMessage("Please enter a valid 6-digit PIN code.");
       return;
     }
@@ -160,12 +185,17 @@ function CheckoutContent() {
           customer_name: formData.customerName.trim(),
           customer_phone: formData.customerPhone.trim(),
           customer_email: formData.customerEmail.trim() || undefined,
-          shipping_address: {
-            address: formData.address.trim(),
-            city: formData.city.trim(),
-            state: formData.state.trim(),
-            pincode: formData.pincode.trim(),
-          },
+          delivery_choice: deliveryChoice,
+          pickup_point: pickup?.point,
+          payment_option: paymentOption,
+          shipping_address: isPickup
+            ? undefined
+            : {
+                address: formData.address.trim(),
+                city: formData.city.trim(),
+                state: formData.state.trim(),
+                pincode: formData.pincode.trim(),
+              },
           items: activeItems.map((item) => ({
             product_id: item.productId,
             variant_id: item.variantId,
@@ -188,14 +218,19 @@ function CheckoutContent() {
       saveOrderSummary({
         orderNumber,
         total: orderData.amount,
+        orderTotal: orderData.order_total,
+        codBalance: orderData.cod_balance || undefined,
         customerName: formData.customerName.trim(),
         customerPhone: formData.customerPhone.trim(),
-        shippingAddress: {
-          address: formData.address.trim(),
-          city: formData.city.trim(),
-          state: formData.state.trim(),
-          pincode: formData.pincode.trim(),
-        },
+        shippingAddress: pickup
+          ? { address: "", city: pickup.area, state: pickup.state, pincode: "", delivery: "apsrtc_pickup", pickupArea: pickup.area, pickupPoint: pickup.point }
+          : {
+              address: formData.address.trim(),
+              city: formData.city.trim(),
+              state: formData.state.trim(),
+              pincode: formData.pincode.trim(),
+              delivery: "home",
+            },
         items: activeItems.map((item) => ({
           name: item.name,
           variantName: item.variantName,
@@ -250,7 +285,7 @@ function CheckoutContent() {
           currency: currency || "INR",
           order_id: razorpayOrderId,
           name: "Kushal's Mart",
-          description: `Order ${orderNumber}`,
+          description: orderData.cod_balance ? `${COD_ADVANCE_PERCENT}% advance for order ${orderNumber} (COD)` : `Order ${orderNumber}`,
           prefill: {
             name: formData.customerName,
             email: formData.customerEmail || undefined,
@@ -430,7 +465,7 @@ function CheckoutContent() {
                 GUEST CHECKOUT — NO ACCOUNT NEEDED
               </span>
               <h1 className="font-extrabold text-2xl sm:text-3xl text-gray-900 tracking-tight">
-                Shipping &amp; Contact Details
+                Contact &amp; Delivery Details
               </h1>
               <p className="text-xs text-gray-500 font-medium mt-1">
                 Enter your details. You&apos;ll be taken to our secure payment gateway to complete payment.
@@ -511,10 +546,73 @@ function CheckoutContent() {
               </div>
             </div>
 
-            {/* Shipping Address */}
+            {/* Delivery choice: asked up front so the shop never has to phone to find out */}
+            <fieldset className="pt-4 border-t border-gray-100">
+              <legend className="float-left mb-4 w-full text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2">
+                2. How do you want to receive it? *
+              </legend>
+              <div className="clear-both grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(Object.keys(DELIVERY_CHOICES) as DeliveryChoice[]).map((key) => {
+                  const option = DELIVERY_CHOICES[key];
+                  const selected = deliveryChoice === key;
+                  return (
+                    <label
+                      key={key}
+                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-black ${
+                        selected ? "border-red-600 bg-red-50/60" : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="deliveryChoice"
+                        value={key}
+                        checked={selected}
+                        onChange={() => { setDeliveryChoice(key); setErrorMessage(""); }}
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
+                      />
+                      <span className="flex-1">
+                        <span className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
+                          {key === "home" ? <Truck className="h-4 w-4 text-gray-700" /> : <Bus className="h-4 w-4 text-gray-700" />}
+                          {option.label}
+                        </span>
+                        <span className="mt-1 block text-xs font-bold text-red-700">{option.eta}</span>
+                        <span className="mt-0.5 block text-xs font-medium text-gray-500">{option.detail}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {isPickup && (
+                <div className="mt-3 rounded-2xl bg-gray-50 p-4 space-y-2">
+                  <label htmlFor="pickupPoint" className="text-xs font-bold text-gray-700 block">APSRTC pickup point *</label>
+                  <select
+                    id="pickupPoint"
+                    value={pickupPoint}
+                    onChange={(e) => { setPickupPoint(e.target.value); setErrorMessage(""); }}
+                    className="w-full rounded-2xl border border-gray-200 bg-white p-3 text-sm font-semibold text-gray-900 focus:border-black focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Choose where you&apos;ll collect it</option>
+                    {PICKUP_AREAS.map((a) => (
+                      <optgroup key={a.area} label={`${a.area} (${a.state})`}>
+                        {a.points.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p className="text-xs font-medium text-gray-500">
+                    We&apos;ll share the APSRTC LR number on your phone. Show it at the counter to collect your parcel.
+                  </p>
+                </div>
+              )}
+            </fieldset>
+
+            {/* Shipping Address: only needed for home delivery */}
+            {!isPickup && (
             <div className="space-y-4 pt-4 border-t border-gray-100">
               <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2">
-                2. Shipping Address
+                3. Delivery Address
               </h2>
               <div>
                 <label className="text-xs font-bold text-gray-700 block mb-1">Flat / House No. / Street Address *</label>
@@ -560,12 +658,78 @@ function CheckoutContent() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* Payment: pay in full, or Cash on Delivery with a 25% advance (home delivery, ₹1,000+) */}
+            {deliveryChoice && (
+              <fieldset className="pt-4 border-t border-gray-100">
+                <legend className="float-left mb-4 w-full text-xs font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100 pb-2">
+                  {isPickup ? "3. Payment" : "4. Payment"}
+                </legend>
+                {isPickup ? (
+                  <p className="clear-both text-xs font-semibold text-gray-600">
+                    APSRTC pickup orders are paid online in full. Cash on Delivery is available with home delivery.
+                  </p>
+                ) : (
+                  <div className="clear-both grid grid-cols-1 gap-3">
+                    {([
+                      {
+                        key: "full" as const,
+                        title: "Pay full amount online",
+                        line: `${formatPrice(activeSubtotal)} now · no COD charge`,
+                        detail: "UPI, cards or net banking",
+                      },
+                      {
+                        key: "cod" as const,
+                        title: "Cash on Delivery",
+                        line: codAllowed
+                          ? `${formatPrice(codBreakdown(activeSubtotal).advance)} now (${COD_ADVANCE_PERCENT}%) · ${formatPrice(codBreakdown(activeSubtotal).balance)} at your door`
+                          : `For orders of ${formatPrice(COD_MIN_ORDER)} or more`,
+                        detail: codAllowed
+                          ? `Pay the rest in cash, plus a ${formatPrice(COD_FEE)} COD charge`
+                          : `Add ${formatPrice(COD_MIN_ORDER - activeSubtotal)} more to use Cash on Delivery`,
+                      },
+                    ]).map((opt) => {
+                      const disabled = opt.key === "cod" && !codAllowed;
+                      const selected = paymentOption === opt.key;
+                      return (
+                        <label
+                          key={opt.key}
+                          className={`flex items-start gap-3 rounded-2xl border-2 p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-black ${
+                            disabled
+                              ? "cursor-not-allowed border-gray-100 bg-gray-50 opacity-70"
+                              : selected
+                              ? "cursor-pointer border-red-600 bg-red-50/60"
+                              : "cursor-pointer border-gray-200 bg-white hover:border-gray-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="paymentOption"
+                            value={opt.key}
+                            checked={selected}
+                            disabled={disabled}
+                            onChange={() => setPaymentChoice(opt.key)}
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
+                          />
+                          <span className="flex-1">
+                            <span className="block text-sm font-extrabold text-gray-900">{opt.title}</span>
+                            <span className="mt-1 block text-xs font-bold text-red-700">{opt.line}</span>
+                            <span className="mt-0.5 block text-xs font-medium text-gray-500">{opt.detail}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </fieldset>
+            )}
 
             {/* Trust signals */}
             <div className="flex flex-wrap gap-4 pt-2 border-t border-gray-100">
               {[
                 { icon: ShieldCheck, text: "100% Verified Checkout" },
-                { icon: Truck, text: "Free Express Shipping" },
+                { icon: Truck, text: "Free Delivery" },
                 { icon: Lock, text: "Safe & Secure" },
               ].map((item) => (
                 <div key={item.text} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500">
@@ -620,15 +784,36 @@ function CheckoutContent() {
                 <span className="font-bold text-gray-900">{formatPrice(activeSubtotal)}</span>
               </div>
               <div className="flex justify-between text-emerald-700">
-                <span>Express Shipping</span>
+                <span>{deliveryChoice ? `${DELIVERY_CHOICES[deliveryChoice].label} (${DELIVERY_CHOICES[deliveryChoice].eta})` : "Delivery"}</span>
                 <span className="font-bold uppercase">FREE</span>
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-4 flex justify-between items-baseline">
-              <span className="font-extrabold text-base text-gray-900">Total Payable</span>
-              <span className="font-extrabold text-2xl text-red-600">{formatPrice(activeSubtotal)}</span>
-            </div>
+            {cod ? (
+              <div className="space-y-2 border-t border-gray-100 pt-4">
+                <div className="flex justify-between text-xs font-semibold text-gray-600">
+                  <span>COD charge</span>
+                  <span className="font-bold text-gray-900">{formatPrice(cod.fee)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-semibold text-gray-600">
+                  <span>Order total</span>
+                  <span className="font-bold text-gray-900">{formatPrice(cod.total)}</span>
+                </div>
+                <div className="flex justify-between items-baseline pt-2">
+                  <span className="font-extrabold text-base text-gray-900">Pay now ({COD_ADVANCE_PERCENT}%)</span>
+                  <span className="font-extrabold text-2xl text-red-600">{formatPrice(cod.advance)}</span>
+                </div>
+                <div className="flex justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                  <span>Pay in cash at delivery</span>
+                  <span>{formatPrice(cod.balance)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-gray-100 pt-4 flex justify-between items-baseline">
+                <span className="font-extrabold text-base text-gray-900">Total Payable</span>
+                <span className="font-extrabold text-2xl text-red-600">{formatPrice(activeSubtotal)}</span>
+              </div>
+            )}
 
             {/* Pay Button */}
             <button
@@ -640,7 +825,9 @@ function CheckoutContent() {
               <span>
                 {isSubmitting
                   ? "PROCESSING..."
-                  : `PAY ${formatPrice(activeSubtotal)} SECURELY`}
+                  : cod
+                  ? `PAY ${formatPrice(payNow)} NOW`
+                  : `PAY ${formatPrice(payNow)} SECURELY`}
               </span>
             </button>
 
