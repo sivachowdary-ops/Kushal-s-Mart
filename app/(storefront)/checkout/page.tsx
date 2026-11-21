@@ -102,7 +102,7 @@ function CheckoutContent() {
   const [pickupPoint, setPickupPoint] = useState("");
   const isPickup = deliveryChoice === "apsrtc_pickup";
   const pickup = isPickup ? findPickupPoint(pickupPoint) : null;
-  // Pay in full, or COD (home delivery, ₹1,000+): 25% now, the rest + ₹50 at the door (lib/cod.ts)
+  // Pay in full, or COD (home delivery, ₹1,000+): 25% now, the rest + ₹100 at the door (lib/cod.ts)
   const [paymentChoice, setPaymentChoice] = useState<PaymentOption>("full");
   const codAllowed = isCodEligible(activeSubtotal, deliveryChoice);
   const paymentOption: PaymentOption = codAllowed ? paymentChoice : "full";

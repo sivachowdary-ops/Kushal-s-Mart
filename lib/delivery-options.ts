@@ -6,7 +6,7 @@ export type DeliveryChoice = "home" | "apsrtc_pickup";
 
 export const DELIVERY_CHOICES: Record<DeliveryChoice, { label: string; eta: string; detail: string }> = {
   home: { label: "Home delivery", eta: "4–7 days", detail: "Courier to your address" },
-  apsrtc_pickup: { label: "APSRTC pickup", eta: "24 hours", detail: "Collect from an APSRTC point near you" },
+  apsrtc_pickup: { label: "APSRTC pickup", eta: "24–48 hours", detail: "Collect from an APSRTC point near you" },
 };
 
 /**

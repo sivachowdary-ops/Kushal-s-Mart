@@ -7,7 +7,7 @@
 export interface OrderSummary {
   orderNumber: string;
   total: number; // paise, as charged by the server (the advance for COD)
-  orderTotal?: number; // paise, the whole order (COD: products + ₹50)
+  orderTotal?: number; // paise, the whole order (COD: products + the COD charge)
   codBalance?: number; // paise to pay at the door (COD only)
   customerName: string;
   customerPhone: string;

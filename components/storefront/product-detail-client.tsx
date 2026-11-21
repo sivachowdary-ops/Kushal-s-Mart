@@ -174,7 +174,7 @@ export function ProductDetailClient({ initialProduct }: ProductDetailClientProps
   const checkPincode = () => {
     if (/^(500|51[5-9]|52\d|53[0-5])\d{3}$/.test(pincode)) {
       // Hyderabad (500xxx) and Andhra Pradesh (515xxx–535xxx)
-      setDeliveryResult({ ok: true, text: "APSRTC pickup in 24 hours, or home delivery in 4–7 days. Choose at checkout." });
+      setDeliveryResult({ ok: true, text: "APSRTC pickup in 24–48 hours, or home delivery in 4–7 days. Choose at checkout." });
     } else if (/^[1-9]\d{5}$/.test(pincode)) {
       setDeliveryResult({ ok: true, text: "Home delivery in 4–7 days across India." });
     } else {

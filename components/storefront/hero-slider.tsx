@@ -105,7 +105,7 @@ const DIWALI_SLIDE: ProductSlide = {
   sticker: { big: "10% off", small: "when you pay", className: "bg-[#FFC21A] text-[#111625] -rotate-3" },
 };
 
-const DELIVERY_TAB = { label: "Delivery", hint: "APSRTC pickup in 24 hrs" };
+const DELIVERY_TAB = { label: "Delivery", hint: "APSRTC pickup in 24–48 hrs" };
 const COD_TAB = { label: "COD", hint: `Cash on Delivery, ₹${(COD_MIN_ORDER / 100).toLocaleString("en-IN")}+` };
 
 const TEXT = {
@@ -276,7 +276,7 @@ function DeliveryPoster() {
           </p>
           <h2 className="text-white">
             <span className="font-display flex items-end gap-3">
-              <span className="whitespace-nowrap text-[76px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A] sm:text-[120px] lg:text-[96px] xl:text-[124px]">24</span>
+              <span className="whitespace-nowrap text-[76px] font-extrabold leading-[0.82] tracking-tighter text-[#FFC21A] sm:text-[120px] lg:text-[96px] xl:text-[124px]">24–48</span>
               <span className="pb-1 text-3xl font-extrabold sm:text-5xl lg:text-4xl xl:text-5xl">hours</span>
             </span>
             <span className="font-display mt-3 block text-xl font-bold leading-tight sm:text-3xl xl:text-4xl">
@@ -304,7 +304,7 @@ function DeliveryPoster() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#D3150F] text-white sm:h-14 sm:w-14 sm:rounded-2xl"><Bus className="h-6 w-6 sm:h-7 sm:w-7" /></div>
             <div>
               <p className="text-xs font-bold text-red-700 sm:text-sm">APSRTC pickup, AP &amp; Hyderabad</p>
-              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">24 hours</p>
+              <p className="font-display text-xl font-extrabold text-[#111625] sm:text-3xl">24–48 hours</p>
               <p className="hidden text-sm font-semibold text-gray-600 sm:block">Collect from an APSRTC point</p>
             </div>
           </div>

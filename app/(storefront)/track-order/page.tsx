@@ -182,8 +182,8 @@ function OrderCard({ order }: { order: TrackedOrder }) {
 
         {/* Total Row */}
         {(() => {
-          // COD: the advance is paid online; the rest + ₹50 is paid in cash when the parcel arrives
-          const cod = order.subtotal != null ? orderCodOf({ payment_mode: order.payment_mode, subtotal: order.subtotal }) : null;
+          // COD: the advance is paid online; the rest + the COD charge is paid in cash when the parcel arrives
+          const cod = order.subtotal != null ? orderCodOf({ payment_mode: order.payment_mode, subtotal: order.subtotal, total: order.total }) : null;
           if (!cod) {
             return (
               <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">

@@ -106,7 +106,7 @@ export async function POST(
         unitPrice: i.unit_price,
       })),
       totalAmount: order.total,
-      // COD orders: Delhivery collects the balance (rest of the products + ₹50) at the door
+      // COD orders: Delhivery collects the balance (rest of the products + the COD charge) at the door
       paymentMode: cod ? "cod" : "prepaid",
       codAmount: cod?.balance,
     });
